@@ -817,18 +817,22 @@ setup_studio() {
   read -p "  YClients company ID (optional): " YC_ID
   read -p "  AMO CRM domain (optional): " AMO_DOMAIN
 
-  local PYTHONPATH="${PROJECT_DIR}/.agent/marketing-analyst/.skills/marketing-pipeline"
-  local CMD="PYTHONPATH=${PYTHONPATH} DATABASE_URL=${DB_URL} ${PY_CMD} ${PROJECT_DIR}/add_studio.py"
-  CMD="${CMD} --studio-id=${STUDIO_ID} --name=\"${STUDIO_NAME}\""
-  [[ -n "${YC_ID}" ]]     && CMD="${CMD} --yc-company-id=${YC_ID}"
-  [[ -n "${AMO_DOMAIN}" ]] && CMD="${CMD} --amo-domain=${AMO_DOMAIN}"
-
   if [[ "${DRY_RUN}" == true ]]; then
-    info "Would run: ${CMD}"
+    info "Would insert studio '${STUDIO_ID}' into ops.studios"
     return
   fi
 
-  eval "${CMD}" && success "Studio '${STUDIO_ID}' added" || warn "Studio setup failed — add later via add_studio.py"
+  # Quote string values for SQL, use NULL for empty
+  local yc_val="NULL"
+  local amo_val="NULL"
+  [[ -n "${YC_ID}" ]]      && yc_val="${YC_ID}"
+  [[ -n "${AMO_DOMAIN}" ]] && amo_val="'${AMO_DOMAIN}'"
+
+  psql "${DB_URL}" -c "
+    INSERT INTO ops.studios (studio_id, name, yc_company_id, amo_domain, timezone)
+    VALUES ('${STUDIO_ID}', '${STUDIO_NAME}', ${yc_val}, ${amo_val}, 'Europe/Moscow')
+    ON CONFLICT (studio_id) DO UPDATE SET name = EXCLUDED.name;
+  " 2>/dev/null && success "Studio '${STUDIO_ID}' added" || warn "Studio setup failed — add later via add_studio.py"
 }
 
 # ── 11. Cron jobs ──────────────────────────────────────────────────
