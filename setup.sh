@@ -516,6 +516,30 @@ setup_yc_tokens() {
   success "YC tokens saved to ${env_file}"
 }
 
+# ── Test YClients connection ───────────────────────────────
+test_yc_connection() {
+  local env_file="${WORKSPACE_DIR}/.env"
+  local bearer user
+  bearer=$(grep -E '^YC_BEARER_TOKEN=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+  user=$(grep -E '^YC_USER_TOKEN=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+
+  if [[ -z "${bearer}" ]] || [[ -z "${user}" ]]; then
+    info "YC tokens not fully set — skipping connection test"
+    return
+  fi
+
+  step "YClients API connection test"
+  local rc
+  rc=$(curl -s -o /dev/null -w "%{http_code}" "https://api.yclients.com/api/v2/user" \
+    -H "Authorization: Bearer ${bearer}, User ${user}" 2>/dev/null) || rc=000
+
+  if [[ "${rc}" == "200" ]]; then
+    success "YClients API connection OK"
+  else
+    warn "YClients API connection failed (HTTP ${rc}) — проверьте токены"
+  fi
+}
+
 # ── 7. AMO CRM credentials ──────────────────────────────────
 setup_amo_crm() {
   step "AMO CRM credentials"
@@ -1011,6 +1035,7 @@ main() {
   run_migrations
   install_deps
   setup_yc_tokens
+  test_yc_connection
   setup_amo_crm
   test_amo_connection
   setup_gs_leads
