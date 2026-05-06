@@ -144,6 +144,44 @@ install_psql_if_needed() {
   fi
 }
 
+# ── Retry psql with recommendation ────────────────────────────
+retry_psql() {
+  local os_hint=""
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    os_hint="brew install postgresql"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if command -v apt-get &>/dev/null; then
+      os_hint="sudo apt-get install -y postgresql-client"
+    elif command -v yum &>/dev/null; then
+      os_hint="sudo yum install -y postgresql"
+    elif command -v dnf &>/dev/null; then
+      os_hint="sudo dnf install -y postgresql"
+    fi
+  fi
+
+  echo ""
+  warn "PostgreSQL client (psql) is required for this step."
+  if [[ -n "${os_hint}" ]]; then
+    info "Install it: ${os_hint}"
+  else
+    info "Download: https://www.postgresql.org/download/"
+  fi
+  echo ""
+  read -p "  Установили? Проверить снова? [y/N]: " -n 1 -r
+  echo
+  if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    if command -v psql &>/dev/null; then
+      PSQL_AVAILABLE=true
+      success "psql now available"
+      return 0
+    else
+      warn "psql still not found. Try installing manually, then re-run the script."
+      return 1
+    fi
+  fi
+  return 1
+}
+
 # ── 1. Preflight ────────────────────────────────────────────────
 preflight() {
   step "Preflight checks"
@@ -233,8 +271,7 @@ setup_db() {
   step "Database connection"
 
   if [[ "${PSQL_AVAILABLE}" != true ]]; then
-    warn "Skipping (psql not available)"
-    return
+    retry_psql || { warn "Skipping database setup"; return; }
   fi
 
   local current_url="${DATABASE_URL:-${DB_URL}}"
@@ -298,8 +335,7 @@ run_migrations() {
   step "Database migrations"
 
   if [[ "${PSQL_AVAILABLE}" != true ]]; then
-    warn "Skipping (psql not available)"
-    return
+    retry_psql || { warn "Skipping migrations"; return; }
   fi
 
   local init="${SKILL_DIR}/migrations/init_db.sh"
@@ -350,9 +386,12 @@ setup_yc_tokens() {
   fi
 
   echo ""
-  echo "  YClients API v2 requires two tokens for access."
-  echo "  Partner token — from YClients partner settings"
-  echo "  User token    — from YClients user profile"
+  echo "  YClients API v1 (с заголовками v2)."
+  echo "  Оба токена передаются в одном заголовке:"
+  echo "    Authorization: Bearer <partner>, User <user>"
+  echo ""
+  echo "  Partner token — ключ API из Настройки → API → Ключи доступа"
+  echo "  User token    — токен администратора из того же раздела"
   echo ""
 
   if [[ -n "${existing_bearer}" ]]; then
@@ -465,8 +504,7 @@ setup_initial_data() {
   step "Initial data load"
 
   if [[ "${PSQL_AVAILABLE}" != true ]]; then
-    warn "Skipping (psql not available)"
-    return
+    retry_psql || { warn "Skipping initial data load"; return; }
   fi
 
   if [[ "${AUTO}" == true ]]; then
@@ -524,7 +562,7 @@ setup_initial_data() {
 setup_studio() {
   step "Studio setup"
 
-  if [[ "${PSQL_AVAILABLE}" != true ]]; then warn "Skipping (psql not available)"; return; fi
+  if [[ "${PSQL_AVAILABLE}" != true ]]; then retry_psql || { warn "Skipping studio setup"; return; }; fi
 
   local count
   count=$(psql "${DB_URL}" -t -c "SELECT COUNT(*) FROM ops.studios" 2>/dev/null | tr -d ' ' || echo "0")
