@@ -102,7 +102,37 @@ install_psql_if_needed() {
     read -p "  Install automatically? [Y/n]: " -n 1 -r
     echo
     if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
-      warn "Skipping psql installation"
+      # Show manual install command and give one more chance
+      local os_hint=""
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        os_hint="brew install postgresql"
+      elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if command -v apt-get &>/dev/null; then
+          os_hint="sudo apt-get install -y postgresql-client"
+        elif command -v yum &>/dev/null; then
+          os_hint="sudo yum install -y postgresql"
+        elif command -v dnf &>/dev/null; then
+          os_hint="sudo dnf install -y postgresql"
+        fi
+      fi
+      echo ""
+      if [[ -n "${os_hint}" ]]; then
+        info "Install manually: ${os_hint}"
+      else
+        info "Download: https://www.postgresql.org/download/"
+      fi
+      echo ""
+      read -p "  Установили? Проверить снова? [y/N]: " -n 1 -r
+      echo
+      if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+        if command -v psql &>/dev/null; then
+          success "psql now available"
+          return 0
+        else
+          warn "psql still not found."
+        fi
+      fi
+      PSQL_RETRY_DECLINED=true
       return 1
     fi
   fi
@@ -146,6 +176,10 @@ install_psql_if_needed() {
 
 # ── Retry psql with recommendation ────────────────────────────
 retry_psql() {
+  if [[ "${PSQL_RETRY_DECLINED}" == true ]]; then
+    return 1
+  fi
+
   local os_hint=""
   if [[ "$OSTYPE" == "darwin"* ]]; then
     os_hint="brew install postgresql"
@@ -176,9 +210,11 @@ retry_psql() {
       return 0
     else
       warn "psql still not found. Try installing manually, then re-run the script."
+      PSQL_RETRY_DECLINED=true
       return 1
     fi
   fi
+  PSQL_RETRY_DECLINED=true
   return 1
 }
 
