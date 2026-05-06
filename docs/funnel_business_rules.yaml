@@ -1,0 +1,537 @@
+# Funnel Business Rules
+# Описание этапов воронки продаж и правил определения статуса лида
+# в различных системах (AMO CRM, YClients)
+
+version: "1.0"
+date: "2026-05-05"
+
+# Основные этапы воронки (из docs/funnel.mmd)
+funnel_stages:
+  - id: S01
+    name: "Новая заявка"
+    description: "Лид только что поступил, ещё не обработан"
+    alert_code: "A13, A14"
+    tg_alert:
+      - condition: "phone_valid = FALSE"
+        message: "Ломаный номер телефона у лида. Проверьте AMO."
+      - condition: "ad_channel_unknown = TRUE"
+        message: "Лид с неизвестным рекламным каналом. Вероятно не из рекламы."
+    systems:
+      amo_crm:
+        status_id: [74087434, 74087430]
+        status_name: "НОВАЯ ЗАЯВКА / Неразобранное"
+        detection_rules:
+          - "status_id IN (74087434, 74087430)"
+          - "responsible_user_id IS NOT NULL (назначен менеджер)"
+      yclients:
+        has_record: false
+        detection: "NOT EXISTS (SELECT 1 FROM yc_visits WHERE client_phone = lead.phone)"
+      gsheets:
+        has_record: true
+        enrichment: "Матчинг по client_phone. Если найден — записать utm_source/utm_campaign. Если не найден — TG alert."
+    validation:
+      phone:
+        check: "regexp: не 0000000000, не все одинаковые цифры, длина >= 10"
+        alert_if: "phone_valid = FALSE"
+        alert_type: "A13"
+      ad_channel:
+        check: "utm_source не пустой для новых лидов"
+        alert_if: "ad_channel_unknown = TRUE"
+        alert_type: "A14"
+      check: "created_at within last 24 hours"
+      alert_if: "status unchanged for > 2 hours"
+      sla: "1 hour for manager assignment"
+
+  - id: S02a
+    name: "Не взяли трубку (Рязанский)"
+    description: "Менеджер не смог дозвониться, филиал Рязанский"
+    alert_code: "A06"
+    tg_alert:
+      - condition: "updated_at < NOW() - N days AND closed_at IS NULL"
+        message: "Клиент не берет трубку > N дней. Возможно, потерян."
+    systems:
+      amo_crm:
+        status_id: 74087582
+        status_name: "НЕ ВЗЯЛИ ТРУБКУ Рязанский"
+        studio_id: "studio_a"
+      yclients:
+        has_record: false
+    validation:
+      check: "callback_attempt_count >= 2"
+      max_attempts: 3
+      move_to: "S11 (Закрыто и не реализовано)"
+
+  - id: S02b
+    name: "Не взяли трубку (Люблино)"
+    description: "Менеджер не смог дозвониться, филиал Люблино"
+    alert_code: "A06"
+    tg_alert:
+      - condition: "updated_at < NOW() - N days AND closed_at IS NULL"
+        message: "Клиент не берет трубку > N дней. Возможно, потерян."
+    systems:
+      amo_crm:
+        status_id: 84866066
+        status_name: "не взяли трубку люблино"
+        studio_id: "studio_b"
+      yclients:
+        has_record: false
+    validation:
+      check: "callback_attempt_count >= 2"
+      max_attempts: 3
+      move_to: "S11 (Закрыто и не реализовано)"
+
+  - id: S03a
+    name: "Переговоры (Рязанский)"
+    description: "Ведутся переговоры с клиентом, филиал Рязанский"
+    alert_code: "A05"
+    tg_alert:
+      - condition: "created_at < NOW() - N days AND closed_at IS NULL"
+        message: "Клиент завис в переговорах > N дней без смены статуса."
+    systems:
+      amo_crm:
+        status_id: 74087586
+        status_name: "ПЕРЕГОВОРЫ Рязанский"
+        studio_id: "studio_a"
+      yclients:
+        has_record: false
+        # Иногда может быть предварительная бронь
+        has_waitlist: "optional"
+    validation:
+      check: "last_activity within 48 hours"
+      alert_if: "no activity for > 3 days"
+      sla: "conversion to appointment within 7 days"
+
+  - id: S03b
+    name: "Переговоры (Люблино)"
+    description: "Ведутся переговоры с клиентом, филиал Люблино"
+    alert_code: "A05"
+    tg_alert:
+      - condition: "created_at < NOW() - N days AND closed_at IS NULL"
+        message: "Клиент завис в переговорах > N дней без смены статуса."
+    systems:
+      amo_crm:
+        status_id: 84866070
+        status_name: "ПЕРЕГОВОРЫ Люблино"
+        studio_id: "studio_b"
+      yclients:
+        has_record: false
+        has_waitlist: "optional"
+    validation:
+      check: "last_activity within 48 hours"
+      alert_if: "no activity for > 3 days"
+      sla: "conversion to appointment within 7 days"
+
+  - id: S04
+    name: "Назначен визит"
+    description: "Клиент согласился на визит, дата назначена"
+    alert_code: "A07"
+    cross_check: "stage4_appointment_no_yc"
+    tg_alert:
+      - condition: "funnel_stage = appointment AND yc_booking_id IS NULL"
+        message: "Визит назначен в AMO, но не создан в YClients."
+    systems:
+      amo_crm:
+        status_id: 74087590
+        status_name: "НАЗНАЧЕН ВИЗИТ"
+        detection_rules:
+          - "status_id = 74087590"
+          - "custom_fields может содержать дату визита"
+      yclients:
+        has_record: true
+        detection_rules:
+          - "EXISTS (SELECT 1 FROM yc_visits WHERE client_phone = lead.phone)"
+          - "datetime > NOW() (будущая запись)"
+          - "attendance IN (0, 2) (ожидание или подтверждён)"
+    validation:
+      cross_system_check: "AMO status должна соответствовать YClients записи"
+      check:
+        - "date_match: AMO custom_field vs YClients datetime"
+        - "studio_match: AMO pipeline vs YClients studio_id"
+      alert_if: "record in YClients but status in AMO not 'НАЗНАЧЕН ВИЗИТ'"
+      alert_code: "A04"
+
+  - id: S05
+    name: "Не пришла на сеанс"
+    description: "Клиент не явился на назначенный визит (no-show)"
+    alert_code: "A08"
+    cross_check: "stage5_visit_mismatch"
+    tg_alert:
+      - condition: "AMO no_show AND YC visited"
+        message: "Расхождение: AMO «не пришла», но YClients «visited»."
+    systems:
+      amo_crm:
+        status_id: 74087594
+        status_name: "НЕ ПРИШЛА НА СЕАНС"
+      yclients:
+        has_record: true
+        detection_rules:
+          - "attendance = -1 (не пришёл)"
+          - "datetime < NOW() (прошедшая запись)"
+    validation:
+      check: "YClients attendance = -1 AND AMO status = 74087594"
+      alert_if: "no-show in YClients but AMO status unchanged"
+      metric: "no_show_rate"
+
+  - id: S06
+    name: "Дошла до 1 записи"
+    description: "Клиент успешно посетил первый сеанс"
+    systems:
+      amo_crm:
+        # Воронка продолжается в зависимости от результата
+        # Может перейти в S07, S08 или S10
+        status_variants:
+          - "внесла залог (S08)"
+          - "НЕ КУПИЛА (S07)"
+          - "Ходит разово (S09)"
+      yclients:
+        has_record: true
+        detection_rules:
+          - "attendance = 1 (пришёл)"
+          - "datetime < NOW() (завершённый визит)"
+          - "is_new = true (первая запись)"
+    validation:
+      check: "YClients attendance = 1 AND is_new = true"
+      metric: "first_visit_conversion"
+
+  - id: S07
+    name: "Не купила"
+    description: "Клиент посетил, но не приобрёл абонемент/программу"
+    alert_code: "A09"
+    cross_check: "stage7_visit_no_purchase"
+    tg_alert:
+      - condition: "YC visits > 0 AND AMO not_bought"
+        message: "Клиент был на визите, но не купил."
+      - condition: "YC visits = 0"
+        message: "Ожидаемо: клиент не дошёл."
+    systems:
+      amo_crm:
+        status_id: 74087598
+        status_name: "НЕ КУПИЛА"
+      yclients:
+        has_record: true
+        # После посещения без покупки
+        has_next_booking: false
+        purchase_count: 0
+    validation:
+      check: "visit completed AND no purchase within 24 hours"
+      sla: "callback within 48 hours"
+      metric: "lost_opportunity_rate"
+
+  - id: S08
+    name: "Внесла залог"
+    description: "Клиент внёс предоплату/залог за программу"
+    alert_code: "A11"
+    report_type: "deposit_clients"
+    tg_alert:
+      - condition: "AMO.price vs YC.sum mismatch"
+        message: "Расхождение сумм залога."
+      - condition: "always"
+        message: "Список клиентов с залогом: имя, телефон, сумма залога, сумма долга."
+    systems:
+      amo_crm:
+        status_id: 84237074
+        status_name: "внесла залог"
+        custom_fields:
+          - "deposit_amount"
+          - "program_type"
+      yclients:
+        # Залог обычно отражается как покупка
+        has_purchase: true
+        purchase_type: "deposit"
+    validation:
+      check: "AMO status = 84237074 AND price > 0"
+      cross_system_check: "payment in YClients matches AMO price"
+      move_to: "S10 (Успешно реализовано)"
+
+  - id: S09
+    name: "Ходит разово"
+    description: "Клиент покупает разовые посещения, не абонемент"
+    systems:
+      amo_crm:
+        status_id: 84237070
+        status_name: "Ходит разово"
+      yclients:
+        visit_pattern: "single_visits"
+        subscription: false
+    validation:
+      check: "multiple visits with no subscription"
+      metric: "single_visit_clients"
+
+  - id: S10
+    name: "Успешно реализовано"
+    description: "Клиент купил абонемент/программу"
+    alert_code: "A10"
+    cross_check: "stage9_revenue_mismatch"
+    tg_alert:
+      - condition: "YC.sum < AMO.price"
+        message: "Расхождение выручки: YC.sum < AMO.price."
+    systems:
+      amo_crm:
+        status_id: 142
+        status_name: "Успешно реализовано"
+        pipeline_id: 9226358
+      yclients:
+        has_subscription: true
+        # Абонемент виден в записях
+        subscription_active: true
+    validation:
+      check: "AMO status = 142 AND YClients has paid visits"
+      cross_system_check: "revenue in AMO matches YClients payments"
+      metric: "conversion_rate"
+      metric: "revenue"
+
+  - id: S11
+    name: "Закрыто и не реализовано"
+    description: "Лид закрыт без покупки"
+    alert_code: "A12"
+    report_type: "closed_lost_analytics"
+    tg_alert:
+      - condition: "closure_rate > threshold"
+        message: "Высокий процент закрытых без продажи. Аналитика по UTM-каналам."
+    systems:
+      amo_crm:
+        status_id: 143
+        status_name: "Закрыто и не реализовано"
+      yclients:
+        has_record: false
+        has_subscription: false
+    validation:
+      check: "AMO status = 143 AND no YClients record OR attendance = -1"
+      metric: "lost_leads"
+      metric: "loss_reasons"  # если хранятся в AMO
+
+  - id: S12
+    name: "Не продлила"
+    description: "Клиент с абонементом не продлил подписку"
+    alert_code: "A05"
+    report_type: "lapsed_clients"
+    tg_alert:
+      - condition: "last_visit > N days ago"
+        message: "Клиент не продлил. История услуг, комментарии → персонализированная реактивация."
+    systems:
+      amo_crm:
+        status_id: 83303646
+        status_name: "НЕ ПРОДЛИЛА"
+      yclients:
+        has_subscription: true
+        subscription_status: "expired"
+        last_visit: "30+ days ago"
+    validation:
+      check: "subscription_expired AND no new_booking within 30 days"
+      sla: "retention_call within 7 days of expiration"
+      metric: "churn_rate"
+
+# Правила согласования между системами (Reconciliation Rules)
+reconciliation:
+  # Проверка: AMO ↔ YClients
+  amo_vs_yclients:
+    description: "Сверка данных между AMO CRM и YClients"
+    checks:
+      - name: "lead_has_yc_record"
+        condition: |
+          AMO.status IN (74087590, 74087594, 142)  # Назначен, Не пришёл, Успех
+          AND NOT EXISTS (SELECT 1 FROM yc_visits WHERE phone = AMO.client_phone)
+        severity: "WARNING"
+        alert_code: "A04"
+        message: "Лид в продвинутом статусе AMO без записи в YClients"
+
+      - name: "yc_record_no_amo"
+        condition: |
+          EXISTS (SELECT 1 FROM yc_visits v
+                  LEFT JOIN amo_leads a ON v.client_phone = a.client_phone
+                  WHERE a.id IS NULL)
+        severity: "INFO"
+        message: "Запись в YClients без лида в AMO (прямой заход)"
+
+      - name: "studio_mismatch"
+        condition: |
+          AMO.pipeline_id = 9226358
+          AND YClients.studio_id != AMO.derived_studio_id
+        severity: "CRITICAL"
+        alert_code: "A04"
+        message: "Расхождение филиала между AMO и YClients"
+
+      - name: "attendance_status_mismatch"
+        condition: |
+          YClients.attendance = -1 AND AMO.status != 74087594
+          OR YClients.attendance = 1 AND AMO.status NOT IN (142, 84237074)
+        severity: "WARNING"
+        message: "Несоответствие статуса посещения между системами"
+
+# Поля для матчинга лидов между системами
+matching_rules:
+  primary_key: "client_phone"
+  phone_normalization:
+    description: "Очистка номера телефона"
+    rules:
+      - "remove all non-digit characters"
+      - "if starts with '8' and length=11 → replace with '7'"
+      - "if length=10 → add '7' prefix"
+    example:
+      input: "+7 (999) 772-10-79"
+      output: "79997721079"
+
+  secondary_match:
+    - field: "client_name"
+      weight: 0.3
+      algorithm: "fuzzy_match (Levenshtein distance)"
+
+  fallback:
+    - field: "created_at"
+      tolerance: "±24 hours"
+      condition: "name similarity > 80%"
+
+# Правила определения филиала (Studio Detection)
+studio_detection:
+  priority:
+    - source: "amo_status_id"
+      mapping:
+        74087582: "studio_a"  # НЕ ВЗЯЛИ ТРУБКУ Рязанский
+        74087586: "studio_a"  # ПЕРЕГОВОРЫ Рязанский
+        84866066: "studio_b"  # не взяли трубку люблино
+        84866070: "studio_b"  # ПЕРЕГОВОРЫ Люблино
+
+    - source: "amo_user_id"
+      mapping:
+        12112418: "studio_a"  # XSIZE Рязанский пр-т
+        12112458: "studio_b"  # Админ1
+
+    - source: "yclients_staff_id"
+      mapping:
+        5111463: "studio_a"   # Александра
+        3741329: "studio_a"   # Анна Зыкова
+        3745349: "studio_a"   # Денис Мартынов
+        3757001: "studio_a"   # Татьяна Ковалева
+        4964993: "studio_a"   # Светлана
+        3910523: "studio_a"   # Ольга
+        4181742: "studio_a"   # Екатерина
+        # Люблино staff IDs (нужно добавить)
+
+    - source: "lead_name"
+      pattern:
+        'люблино': "studio_b"
+        'рязанский': "studio_a"
+
+# Ключевые метрики воронки
+metrics:
+  - name: "lead_to_visit_conversion"
+    formula: "COUNT(S04) / COUNT(S01) * 100"
+    target: "> 30%"
+    alert_if: "< 25% for 3 days"
+
+  - name: "visit_to_purchase_conversion"
+    formula: "COUNT(S10) / COUNT(S06) * 100"
+    target: "> 40%"
+
+  - name: "no_show_rate"
+    formula: "COUNT(S05) / COUNT(S04) * 100"
+    target: "< 15%"
+    alert_if: "> 25% for 7 days"
+
+  - name: "sales_cycle_duration"
+    formula: "AVG(S10.created_at - S01.created_at)"
+    unit: "days"
+    target: "< 7 days"
+
+  - name: "revenue_per_lead"
+    formula: "SUM(S10.price) / COUNT(S01)"
+    unit: "RUB"
+
+# Алерты и пороги
+alerts:
+  A01:
+    name: "Low Conversion Rate"
+    condition: "conversion < 30% for 3 consecutive days"
+    severity: "IMPORTANT"
+    action: "HOTL"
+
+  A02:
+    name: "High No-Show Rate"
+    condition: "no_show_rate > 25% for 7 days"
+    severity: "IMPORTANT"
+    action: "HOTL"
+
+  A03:
+    name: "High CAC"
+    condition: "CAC > average + 20%"
+    severity: "IMPORTANT"
+    action: "HOTL"
+
+  A04:
+    name: "Data Mismatch AMO vs YClients"
+    condition: "discrepancy > 10%"
+    severity: "CRITICAL"
+    action: "HITL"
+    gate: true
+
+  A05:
+    name: "Stuck in Negotiations"
+    stage: 2
+    condition: "duration > N days without status change"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A06:
+    name: "Lead Lost (No Answer)"
+    stage: 3
+    condition: "no contact > N days"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A07:
+    name: "Appointment without YC Record"
+    stage: 4
+    condition: "AMO appointment, no YC match"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A08:
+    name: "Visit Status Mismatch"
+    stage: 5
+    condition: "AMO no_show, YC visited"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A09:
+    name: "Visit but No Purchase"
+    stage: 7
+    condition: "YC visited, AMO not_bought"
+    severity: "INFO"
+
+  A10:
+    name: "Revenue Mismatch (Success)"
+    stage: 9
+    condition: "YC sum < AMO price"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A11:
+    name: "Deposit Amount Mismatch"
+    stage: 8
+    condition: "AMO price vs YC sum discrepancy"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A12:
+    name: "High Closure Rate"
+    stage: 12
+    condition: "closure % > threshold"
+    severity: "WARNING"
+    action: "HOTL"
+
+  A13:
+    name: "Invalid Phone Number"
+    stage: 1
+    condition: "phone_valid = FALSE"
+    severity: "INFO"
+
+  A14:
+    name: "Unknown Ad Channel"
+    stage: 1
+    condition: "ad_channel_unknown = TRUE for new leads"
+    severity: "INFO"
+
+# Нотации
+# HOTL = Human-in-the-Loop (требуется проверка человека)
+# HITL = Human-in-the-Loop + Gate (pipeline блокируется до разрешения)
+# SLA = Service Level Agreement (целевое время обработки)

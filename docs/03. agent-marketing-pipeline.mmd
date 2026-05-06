@@ -1,0 +1,252 @@
+flowchart TB
+    %% ========== Styles ==========
+    classDef eventSource fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef event fill:#ffcc80,stroke:#e65100
+    classDef pipelineStage fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    classDef pipelineSub fill:#a5d6a7,stroke:#2e7d32
+    classDef dataStore fill:#d1c4e9,stroke:#4527a0
+    classDef dataFlow fill:#e3f2fd,stroke:#1565c0
+    classDef alert fill:#ff8a65,stroke:#bf360c,stroke-width:2px
+    classDef report fill:#ffb74d,stroke:#e65100
+    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef studio fill:#fce4ec,stroke:#c62828,stroke-width:2px
+    classDef studioLabel fill:#ffcdd2,stroke:#c62828
+    classDef legendPipeline fill:#81c784,stroke:#1b5e20
+    classDef legendEvent fill:#fff3e0,stroke:#e65100
+    classDef legendAgent fill:#e8f5e9,stroke:#2e7d32,stroke-width:3px
+
+    %% ========== TITLE ==========
+    titleNode["📊 Архитектурный паттерн: Pipeline + Event-Driven<br/>marketing-analyst (multi-studio)"]:::pipelineStage
+
+    %% ========== 0. STUDIOS ==========
+    subgraph STUDIOS["Сеть студий (N студий)"]
+        direction TB
+
+        STUDIO_A["Студия A<br/>YC: company_id_1<br/>AMO: pipeline_1<br/>GS: sheet_1"]:::studio
+        STUDIO_B["Студия B<br/>YC: company_id_2<br/>AMO: pipeline_2<br/>GS: sheet_2"]:::studio
+        STUDIO_N["Студия N<br/>YC: company_id_N<br/>AMO: pipeline_N<br/>GS: sheet_N"]:::studio
+    end
+
+    %% ========== 1. MARKETING AGENT ==========
+    AGENT["🤖 marketing-analyst<br/>Маркетолог массажной студии<br/>Владелец pipeline и обработчик NL-запросов"]:::legendAgent
+
+    %% ========== 2. EVENT SOURCES ==========
+    subgraph EVENTS["Event Sources (что запускает процесс)"]
+        direction TB
+        CRON_DAILY["⏰ Cron: 22:30 ежедневно<br/>Ежедневный отчёт"]:::eventSource
+        CRON_WEEKLY["⏰ Cron: Пн 14:00<br/>Еженедельная воронка"]:::eventSource
+        CRON_MONTHLY["⏰ Cron: 1 число / крайний день<br/>Ежемесячные отчёты"]:::eventSource
+        CRON_ALERT["⏰ Cron: Каждые 4 часа<br/>Сканер алертов"]:::eventSource
+        NL_QUERY["💬 NL-запрос от Георгия<br/>'покажи лиды за вчера'"]:::eventSource
+        DATA_CHANGE["📡 Data Change Event<br/>Новый лид в AMO / YClients"]:::eventSource
+    end
+
+    %% ========== 3. PIPELINE ==========
+    subgraph PIPELINE["Pipeline — параметризован studio_id"]
+        direction TB
+
+        subgraph S1["Stage 1: Collect — Сбор данных"]
+            S1A["Сбор из источников для каждой студии<br/>AMO CRM, YClients, Google Sheets<br/>параметр: studio_id"]:::pipelineSub
+            S1B["Запись сырых данных в `raw.*`<br/>с пометкой studio_id"]:::pipelineSub
+        end
+
+        subgraph S2["Stage 2: Normalize — Нормализация"]
+            S2A["Нормализация + дедупликация<br/>Приведение к единой модели<br/>Поле: studio_id в каждой записи"]:::pipelineSub
+            S2B["Категоризация источников<br/>Унификация статусов лидов<br/>raw.* → staging.*"]:::pipelineSub
+        end
+
+        subgraph S3["Stage 3: Reconcile — Сверка"]
+            S3A["Сверка AMO ↔ YClients<br/>per-studio и cross-studio"]:::pipelineSub
+            S3B["Сверка AMO ↔ Google Sheets<br/>per-studio"]:::pipelineSub
+            S3C["Проверка расхождений<br/>• <5%: OK<br/>• 5-10%: Warning<br/>• >10%: Critical Alert"]:::pipelineSub
+        end
+
+        subgraph S4["Stage 4: Metrics — Расчёт метрик"]
+            S4A["Расчёт конверсий<br/>PER-STUDIO и CONSOLIDATED<br/>лид→запись, запись→визит,<br/>визит→покупка абонемента"]:::pipelineSub
+            S4B["Расчёт по каналам<br/>CAC, LTV, ROMI<br/>per-studio + сеть"]:::pipelineSub
+            S4C["Анализ трендов<br/>WoW, MoM<br/>Когорты per-studio"]:::pipelineSub
+            S4D["Доля неявок и отмен<br/>по студиям / дням / мастерам"]:::pipelineSub
+        end
+
+        STUDIO_ITER["🔄 Итератор студий<br/>читает ops.config → список studio_id<br/>запускает S1→S2→S3→S4 для каждой"]:::studioLabel
+    end
+
+    %% ========== 4. EVENT-DRIVEN OUTPUTS ==========
+    subgraph EVENT_DRIVEN["Event-Driven — Условные алерты и отчёты"]
+        direction TB
+
+        subgraph ALERTS["Alert Generator (условия → события)"]
+            AL1["⚠️ Конверсия лид→запись<br/>< 30% три дня подряд<br/>→ HOTL: уведомление"]:::alert
+            AL2["⚠️ Неявки на 1-й визит<br/>> X% за 7 дней<br/>→ HOTL: уведомление"]:::alert
+            AL3["🔴 CAC канала > средний+20%<br/>→ HOTL: уведомление"]:::alert
+            AL4["🔴 Расхождение AMO↔YC >10%<br/>→ HITL: блокировка pipeline<br/>до подтверждения"]:::alert
+        end
+
+        subgraph HITL_GATE["HITL Gate (только A04)"]
+            GATE["🔒 Gate: ожидает acknowledge<br/>от Георгия в Telegram<br/>кнопка [✅ Разобрался]<br/>→ ops.gates: resolved_at"]:::alert
+        end
+
+        subgraph REPORTS["Report Generator (Cron → отчёты)"]
+            R1["📋 Ежедневный 22:30<br/>Per-studio + сводка по сети<br/>Лиды, конверсии, алерты"]:::report
+            R2["📋 Еженедельный Пн 14:00<br/>Воронка per-studio + сеть<br/>Эффективность каналов"]:::report
+            R3["📋 Ежемесячный 1 число 11:00<br/>Клиентская база per-studio"]:::report
+            R4["📋 Ежемесячный крайний день<br/>Рейтинг абонементов per-studio"]:::report
+        end
+    end
+
+    %% ========== 5. DATA CONNECTORS ==========
+    subgraph CONNECTORS["Data Connectors (Python Sub-Agents)"]
+        direction TB
+        CONN_AMO["amo_crm_connector<br/>параметр: studio_id → domain/pipeline<br/>итерирует по студиям"]:::pipelineSub
+        CONN_YC["yclients_connector<br/>параметр: studio_id → company_id<br/>итерирует по студиям"]:::pipelineSub
+        CONN_GS["gsheets_connector<br/>параметр: studio_id → sheet_id<br/>итерирует по студиям"]:::pipelineSub
+    end
+
+    %% ========== 6. DATA STORES ==========
+    subgraph STORES["PostgreSQL — слои данных (studio_id как partition key)"]
+        direction TB
+
+        subgraph LAYER_CONFIG["Schema: ops — конфигурация студий"]
+            OPS_STUDIOS[(ops.studios<br/>studio_id, name,<br/>yc_company_id, amo_domain,<br/>gs_sheet_id, timezone)]:::dataStore
+            OPS_CONFIG[(ops.config<br/>пороги, расписания)]:::dataStore
+        end
+
+        subgraph LAYER_RAW["Schema: raw — сырые данные (studio_id)"]
+            RAW_AMO[(raw.amo_leads<br/>studio_id, лиды, статусы, UTM)]:::dataStore
+            RAW_YC[(raw.yc_visits<br/>studio_id, записи, суммы)]:::dataStore
+            RAW_GS[(raw.gs_expenses<br/>studio_id, расходы)]:::dataStore
+        end
+
+        subgraph LAYER_STAGING["Schema: staging — нормализованные (studio_id)"]
+            STG_LEADS[(staging.leads_normalized<br/>studio_id, Lead, FunnelStage)]:::dataStore
+            STG_CHANNELS[(staging.channels<br/>studio_id, агрегация)]:::dataStore
+        end
+
+        subgraph LAYER_METRICS["Schema: metrics — per-studio + consolidated"]
+            MET_DAILY[(metrics.daily_summary<br/>studio_id / 'all'<br/>конверсии по дням)]:::dataStore
+            MET_WEEKLY[(metrics.weekly_funnel<br/>studio_id / 'all'<br/>воронка, тренды)]:::dataStore
+            MET_MONTHLY[(metrics.monthly_cohorts<br/>studio_id / 'all'<br/>CAC, LTV, ROMI)]:::dataStore
+            MET_CHANNEL[(metrics.channel_roi<br/>studio_id / 'all'<br/>ROI)]:::dataStore
+        end
+
+        subgraph LAYER_ALERTS["Schema: ops — алерты и gates"]
+            OPS_ALERTS[(ops.active_alerts<br/>studio_id, severity)]:::dataStore
+            OPS_GATES[(ops.gates<br/>alert_id, studio_id,<br/>resolved_at, ack_by)]:::dataStore
+        end
+    end
+
+    %% ========== 7. DELIVERY ==========
+    subgraph DELIVERY["Delivery"]
+        TG["📱 Telegram<br/>Георгий + чаты"]:::external
+        CANVAS["🖥️ OpenCLAW Canvas<br/>Live dashboard"]:::external
+    end
+
+    %% ========== FLOWS — Studios → Config → Iterator ==========
+    STUDIO_A ~~~ STUDIO_B ~~~ STUDIO_N
+
+    STUDIO_ITER -->|"читает список студий"| OPS_STUDIOS
+    OPS_STUDIOS -->|"studio_id → company_id"| CONN_AMO
+    OPS_STUDIOS -->|"studio_id → domain"| CONN_YC
+    OPS_STUDIOS -->|"studio_id → sheet_id"| CONN_GS
+
+    %% ========== FLOWS — Agent владеет pipeline ==========
+    AGENT -->|"управляет"| PIPELINE
+    AGENT -->|"обрабатывает"| EVENTS
+    AGENT -->|"отвечает на"| NL_QUERY
+
+    %% ========== FLOWS — Event Sources → Pipeline ==========
+    CRON_DAILY -->|"триггер: итератор студий"| STUDIO_ITER
+    CRON_WEEKLY -->|"триггер: итератор студий"| STUDIO_ITER
+    CRON_MONTHLY -->|"триггер: итератор студий"| STUDIO_ITER
+    CRON_ALERT -->|"триггер: проверка условий<br/>per-studio"| ALERTS
+
+    NL_QUERY -->|"парсинг намерения<br/>SELECT с фильтром studio_id"| MET_DAILY
+    NL_QUERY -->|"без вызова connectors"| STG_LEADS
+
+    DATA_CHANGE -->|"вебхук: новый лид (studio_id)"| S1
+
+    %% ========== FLOWS — Iterator → Pipeline per studio ==========
+    STUDIO_ITER -->|"запуск S1 для studio_id"| S1
+    S1 -->|"сырые данные (studio_id)"| S2
+    S2 -->|"нормализованные данные (studio_id)"| S3
+    S3 -->|"сверенные данные (studio_id)"| S4
+
+    %% ========== FLOWS — Connectors → PostgreSQL raw ==========
+    CONN_AMO -->|"INSERT (studio_id)"| RAW_AMO
+    CONN_YC -->|"INSERT (studio_id)"| RAW_YC
+    CONN_GS -->|"INSERT (studio_id)"| RAW_GS
+
+    %% ========== FLOWS — Pipeline S2: читает raw → пишет staging ==========
+    S2 -->|"SELECT WHERE studio_id=X"| RAW_AMO
+    S2 -->|"SELECT WHERE studio_id=X"| RAW_YC
+    S2 -->|"SELECT WHERE studio_id=X"| RAW_GS
+    S2 -->|"INSERT (studio_id)"| STG_LEADS
+
+    %% ========== FLOWS — Pipeline S4: читает staging → пишет metrics ==========
+    S4 -->|"SELECT WHERE studio_id=X"| STG_LEADS
+    S4 -->|"INSERT per-studio (studio_id)"| MET_DAILY
+    S4 -->|"INSERT consolidated (studio_id='all')"| MET_DAILY
+    S4 -->|"INSERT per-studio + consolidated"| MET_WEEKLY
+    S4 -->|"INSERT per-studio + consolidated"| MET_MONTHLY
+    S4 -->|"INSERT per-studio + consolidated"| MET_CHANNEL
+
+    %% ========== FLOWS — Metrics → Event-Driven Outputs ==========
+    S4 -->|"метрики per-studio"| ALERTS
+    S4 -->|"метрики per-studio + consolidated"| REPORTS
+
+    S3 -->|"расхождения per-studio"| ALERTS
+
+    %% ========== FLOWS — Alerts/Reports → Delivery ==========
+    AL1 -->|"HOTL: уведомление (со студией)"| TG
+    AL2 -->|"HOTL: уведомление (со студией)"| TG
+    AL3 -->|"HOTL: уведомление (со студией)"| TG
+    AL4 -->|"🔴 HITL: критическое уведомление<br/>+ кнопка подтверждения"| TG
+
+    %% HITL Gate flow — A04 блокирует pipeline до подтверждения
+    AL4 -->|"создать gate"| OPS_GATES
+    GATE -->|"ожидает resolved_at"| OPS_GATES
+    OPS_GATES -.->|"SELECT WHERE resolved_at IS NULL<br/>есть незакрытые → пропуск студии"| STUDIO_ITER
+    TG -.->|"✅ Разобрался → UPDATE resolved_at"| OPS_GATES
+    REPORTS -->|"per-studio + сводка по сети"| TG
+    REPORTS -->|"live dashboard"| CANVAS
+
+    %% ========== FLOWS — Alert lifecycle ==========
+    ALERTS -->|"INSERT (studio_id)"| OPS_ALERTS
+    OPS_CONFIG -.->|"SELECT пороги<br/>(общие или per-studio)"| ALERTS
+    OPS_ALERTS -.->|"анализ по студиям<br/>калибровка порогов"| OPS_CONFIG
+
+    %% ========== FLOWS — NL Query ==========
+    NL_QUERY -->|"WITH studio_id filter<br/>или 'all'"| MET_WEEKLY
+    NL_QUERY -->|"SELECT per-studio"| MET_MONTHLY
+    NL_QUERY -->|"WITH studio_id"| RAW_AMO
+
+    %% ========== CROSS-AGENT INTEGRATIONS ==========
+    S4 -->|"📤 Лиды по каналам (со студией)"| OPS_REF["→ ops-analyst"]
+    S4 -->|"📤 CAC/ROMI (per-studio)"| FIN_REF["→ finance-analyst"]
+    S4 -->|"📤 Клиенты по мастерам (со студией)"| HR_REF["→ hr-manager"]
+    S4 -->|"📤 Качество трафика (per-studio)"| QUAL_REF["→ quality-manager"]
+
+    OPS_FEED["← ops-analyst: визиты (со студией)"]:::dataFlow --> S3
+    FIN_FEED["← finance-analyst: расходы (со студией)"]:::dataFlow --> S3
+    QUAL_FEED["← quality-manager: оценка (со студией)"]:::dataFlow --> S4
+
+    %% ========== LEGEND ==========
+    subgraph LEGEND_BOX["Legend"]
+        L1["Pipeline Stage"]:::legendPipeline
+        L2["Event Source"]:::eventSource
+        L3["Studio"]:::studio
+        L4["Studio Iterator"]:::studioLabel
+        L5["Alert"]:::alert
+        L6["Report"]:::report
+        L7["Data Store (studio_id)"]:::dataStore
+        L8["AI-Agent"]:::legendAgent
+    end
+
+    %% Apply styles
+    class S1,S2,S3,S4 pipelineStage
+    class CRON_DAILY,CRON_WEEKLY,CRON_MONTHLY,CRON_ALERT,NL_QUERY,DATA_CHANGE eventSource
+    class STUDIO_A,STUDIO_B,STUDIO_N studio
+    class TG,CANVAS external
+    class AGENT legendAgent
+
+    %% Hide order placeholders

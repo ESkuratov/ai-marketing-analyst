@@ -1,0 +1,315 @@
+flowchart TB
+    %% ========== Styles ==========
+    classDef chief fill:#e0f7fa,stroke:#006064,stroke-width:2px
+    classDef agent fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef subAgent fill:#c8e6c9,stroke:#2e7d32
+    classDef parser fill:#a5d6a7,stroke:#1b5e20
+    classDef process fill:#81c784,stroke:#1b5e20
+    classDef dataProcess fill:#66bb6a,stroke:#1b5e20
+    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef telegram fill:#e1f5fe,stroke:#01579b
+    classDef storage fill:#ede7f6,stroke:#4527a0
+    classDef dataModel fill:#d1c4e9,stroke:#4527a0
+    classDef alert fill:#ffcc80,stroke:#e65100
+    classDef report fill:#ffb74d,stroke:#e65100
+    classDef nlQuery fill:#ffe0b2,stroke:#e65100
+    classDef platform fill:#f5f5f5,stroke:#616161
+    classDef integration fill:#f3e5f5,stroke:#7b1fa2,stroke-dasharray: 5 5
+    classDef legend fill:#ffffff,stroke:#333,stroke-width:1px
+
+    %% ========== 1. OpenCLAW PLATFORM (верхний уровень) ==========
+    subgraph PLATFORM["OpenCLAW Platform (Hub-and-Spoke)"]
+        direction TB
+
+        CHANNELS["Multi-Channel Inbox<br/>Telegram / Slack / Web"]
+        GATEWAY["Gateway<br/>Session & Event Manager"]
+        ROUTER["Multi-Agent Router<br/>Message Routing"]
+
+        CHANNELS --> GATEWAY
+        GATEWAY --> ROUTER
+    end
+
+    %% ========== 2. ORCHESTRATOR (chief-operator) ==========
+    subgraph ORCH["Orchestration Layer"]
+        CHIEF["chief-operator<br/>Операционный директор<br/>━━━━━━━━━━━━━━<br/>Координация агентов<br/>Утренние/вечерние сводки<br/>Анализ отклонений"]
+    end
+
+    %% ========== 3. MARKETING AGENT (контейнер) ==========
+    subgraph MARKETING["🤖 marketing-analyst"]
+        AGENT["marketing-analyst<br/>Маркетолог<br/>━━━━━━━━━━━━<br/>Лиды, воронка, конверсия<br/>CAC, LTV, ROMI<br/>Алерты и отчёты"]:::agent
+
+        subgraph WORKSPACE["Workspace (OpenCLAW)"]
+            direction TB
+
+        %% 3a. Agent Identity
+        subgraph IDENTITY["Agent Identity"]
+            SOUL[SOUL.md<br/>Личность: Маркетолог<br/>Массажной студии]
+            SKILL[SKILL.md<br/>Основной промпт:<br/>Роль, Pipeline, Формат отчётов]
+            TOOLS[TOOLS.md<br/>Доступные инструменты]
+        end
+
+        %% 3b. Data Parsers / Connectors
+        subgraph PARSERS["S1: Data Connectors (Python Sub-Agents)<br/>параметризованы studio_id"]
+            P_AMO["amo_crm_connector<br/>━━━━━━━━━━━━━<br/>Лиды, Воронка,<br/>Этапы, UTM, Кампании<br/>Итерация по студиям"]
+            P_YC["yclients_connector<br/>━━━━━━━━━━━━━<br/>Записи, Визиты,<br/>Клиенты, Суммы<br/>Итерация по студиям"]
+            P_GS["gsheets_connector<br/>━━━━━━━━━━━━━<br/>Расходы по статьям<br/>Browser/API: Google Sheets"]
+        end
+
+        %% 3c. Studio Registry + Cron Scheduler
+        subgraph STUDIO_CFG["Studio Registry (ops.studios)"]
+            ST_REG["studio_id → yc_company_id,<br/>amo_domain, gs_sheet_id,<br/>timezone, status"]:::dataStore
+        end
+
+        subgraph ITERATOR["Studio Iterator"]
+            ST_ITER["🔄 Итератор студий<br/>читает ops.studios<br/>→ запуск S1-S4 per studio<br/>→ агрегация consolidated"]:::alert
+        end
+
+        %% 3d. Cron Scheduler
+        subgraph CRON["Cron Jobs (Scheduled Tasks)"]
+            CRON_DAILY["daily_digest<br/>Ежедневно 22:30<br/>Лиды, конверсии"]
+            CRON_WEEKLY["weekly_funnel<br/>Пн 14:00<br/>Воронка, каналы"]
+            CRON_MONTHLY1["monthly_retention<br/>1 число 11:00<br/>Клиентская база"]
+            CRON_MONTHLY2["monthly_abonements<br/>Крайний день 21:00<br/>Рейтинг абонементов"]
+            CRON_MONTHLY3["monthly_channels<br/>1 число 11:05<br/>CAC, LTV, ROI"]
+            CRON_ALERT["alert_scanner<br/>Каждые 4 часа<br/>Проверка алертов"]
+        end
+
+        %% 3e. Data Pipeline
+        subgraph PIPELINE["Data Processing Pipeline<br/>итерация per-studio + consolidated"]
+            direction TB
+
+            PIPE_NORM["S2: Normalize — Нормализация<br/>━━━━━━━━━━━━━━━━━━━━<br/>Дедупликация, унификация<br/>статусов, категоризация<br/>источников<br/>raw.* → staging.*"]
+
+            PIPE_REC["S3: Reconcile — Сверка<br/>━━━━━━━━━━━━━━━━━━<br/>AMO ↔ YClients ↔ GS<br/>Расхождения >10% → Критический<br/>Сверка по: Lead ID, Date, Channel"]
+
+            PIPE_METRICS["S4: Metrics — Метрики<br/>━━━━━━━━━━━━━━━━━━━<br/>Конверсии: лид→запись, запись→визит<br/>CAC, LTV, ROMI по каналам<br/>Доля неявок и отмен<br/>Тренды (WoW, MoM)"]
+
+            PIPE_ALERTS["S5a: Alerts — Алерты<br/>━━━━━━━━━━━━━━━━━<br/>Конверсия <30% 3 дня подряд<br/>Неявки > X% за 7 дней<br/>CAC > средний+20%<br/>Расхождение AMO↔YC >10%"]
+
+            PIPE_REPORTS["S5b: Reports — Отчёты<br/>━━━━━━━━━━━━━━━━━<br/>Ежедневные/еженедельные/<br/>ежемесячные отчёты<br/>Формат: Telegram markdown"]
+        end
+
+        %% 3f. NL Query Handler
+        subgraph NL_HANDLER["Natural Language Query Handler<br/>фильтр по studio_id"]
+            NL_INPUT["Входящий запрос<br/>┌─────────────────┐<br/>│ покажи лиды     │<br/>│ за вчера        │<br/>│ какая конверсия │<br/>└─────────────────┘"]
+            NL_PARSE["Парсинг намерения<br/>Intent Classification:<br/>get_leads | get_conversion |<br/>get_channels | get_alerts"]
+            NL_EXEC["Исполнение запроса<br/>Query metrics DB<br/>or trigger pipeline step"]
+        end
+
+        %% 3g. PostgreSQL — слои данных (studio_id)
+        subgraph STORE["PostgreSQL — слои данных (studio_id partition key)"]
+            direction TB
+
+            subgraph REG_LAYER["Schema: ops — регистр студий"]
+                OPS_ST[(ops.studios<br/>studio_id, name,<br/>yc_company_id, amo_domain,<br/>gs_sheet_id)]:::dataStore
+            end
+
+            subgraph RAW_LAYER["Schema: raw — сырые данные (studio_id)"]
+                RAW_AMO[(raw.amo_leads<br/>studio_id, лиды, UTM)]:::dataStore
+                RAW_YC[(raw.yc_visits<br/>studio_id, записи)]:::dataStore
+                RAW_GS[(raw.gs_expenses<br/>studio_id, расходы)]:::dataStore
+            end
+
+            subgraph STG_LAYER["Schema: staging — нормализованные (studio_id)"]
+                STG_LEADS[(staging.leads_normalized<br/>studio_id, Lead)]:::dataStore
+                STG_CH[(staging.channels<br/>studio_id, агрегация)]:::dataStore
+            end
+
+            subgraph MET_LAYER["Schema: metrics — per-studio + consolidated"]
+                MET_DAILY[(metrics.daily_summary<br/>studio_id / 'all')]:::dataStore
+                MET_WEEKLY[(metrics.weekly_funnel<br/>studio_id / 'all')]:::dataStore
+                MET_MONTHLY[(metrics.monthly_cohorts<br/>studio_id / 'all')]:::dataStore
+                MET_CH[(metrics.channel_roi<br/>studio_id / 'all')]:::dataStore
+            end
+
+            subgraph OPS_LAYER["Schema: ops — алерты, gates, конфиги"]
+                OPS_ALERTS[(ops.active_alerts<br/>studio_id, severity)]:::dataStore
+                OPS_GATES[(ops.gates<br/>HITL: alert_id, studio_id,<br/>resolved_at, ack_by)]:::dataStore
+                OPS_CFG[(ops.config<br/>пороги per-studio / общие)]:::dataStore
+            end
+
+            MODELS_LEAD["Lead<br/>id, source, status, utm,<br/>created_at, stage"]:::dataModel
+            MODELS_STAGE["FunnelStage<br/>name, order, count,<br/>conversion, avg_duration"]:::dataModel
+            MODELS_CHANNEL["Channel<br/>name, type, cost, leads,<br/>bookings, visits, revenue"]:::dataModel
+            MODELS_METRIC["Metric<br/>name, value, period, channel,<br/>threshold, trend, alert_level"]:::dataModel
+            MODELS_ALERT["Alert<br/>type, severity, condition,<br/>value, recommendation"]:::dataModel
+            MODELS_CAMPAIGN["Campaign<br/>name, budget, source,<br/>impressions, clicks, cost"]:::dataModel
+        end
+
+        %% 3g. Tools
+        subgraph TOOLS_SECTION["OpenCLAW Tools"]
+            T_HTTP["HTTP Client<br/>AMO & YClients API"]
+            T_BROWSER["Browser Tool<br/>Google Sheets access"]
+            T_CRON["Cron Scheduler<br/>Расписание отчётов"]
+            T_CANVAS["Canvas / A2UI<br/>Live reports"]
+            T_SANDBOX["Docker Sandbox<br/>Изоляция connectors"]
+        end
+    end
+
+    end
+
+    %% ========== 5. EXTERNAL SYSTEMS ==========
+    subgraph EXTERNAL["External Systems"]
+        AMO[AMO CRM<br/>Лиды / Воронка / Этапы<br/>UTM / Кампании]
+        YC[YClients<br/>Записи / Визиты<br/>Клиенты / Суммы]
+        GS[Google Sheets<br/>Расходы по статьям<br/>Сводные таблицы]
+    end
+
+    %% ========== 6. DELIVERY ==========
+    subgraph DELIVERY["Delivery Channels"]
+        TG[Telegram<br/>Георгий + чаты]
+        CANVAS["OpenCLAW Canvas<br/>Live дэшборд"]
+    end
+
+    %% ========== 7. OTHER AGENTS (integrations) ==========
+    subgraph INTEGRATIONS["Integration with Other AI Agents"]
+        OPS["ops-analyst<br/>Операционный<br/>━━━━━━━━━━━━━<br/>Загрузка студии<br/>по каналам"]
+        FIN["finance-analyst<br/>Финансист<br/>━━━━━━━━━━━━━<br/>CAC / ROMI /<br/>Выручка по каналам"]
+        HR["hr-manager<br/>HR-менеджер<br/>━━━━━━━━━━━━━<br/>Распределение<br/>новых клиентов<br/>по мастерам"]
+        QUAL["quality-manager<br/>Методолог<br/>━━━━━━━━━━━━━<br/>Качество трафика<br/>по каналам → оценка"]
+    end
+
+    %% ========== FLOWS ==========
+
+    %% Chief-Operator → Marketing Agent → Workspace
+    CHIEF -->|"координирует"| AGENT
+    CHIEF -->|"получает сводки"| TG
+    AGENT -->|"работает в"| WORKSPACE
+
+    %% Platform → Agent
+    ROUTER -->|"маршрутизирует"| AGENT
+
+    %% Identity → Agent Core
+    SOUL -.-> SKILL
+    SKILL -.-> TOOLS
+
+    %% Studio Registry → Iterator
+    ST_REG -->|"читает список студий"| ST_ITER
+    ST_ITER -->|"studio_id → credentials"| P_AMO
+    ST_ITER -->|"studio_id → credentials"| P_YC
+    ST_ITER -->|"studio_id → credentials"| P_GS
+
+    %% Cron → Iterator (итерация по студиям)
+    CRON_DAILY -->|"запуск 22:30"| ST_ITER
+    CRON_WEEKLY -->|"запуск Пн 14:00"| ST_ITER
+    CRON_MONTHLY1 -->|"запуск 1ч 11:00"| ST_ITER
+    CRON_MONTHLY2 -->|"запуск крайний день 21:00"| ST_ITER
+    CRON_MONTHLY3 -->|"запуск 1ч 11:05"| ST_ITER
+    CRON_ALERT -->|"каждые 4ч"| PIPE_ALERTS
+
+    %% Iterator → Pipeline (per studio)
+    ST_ITER -->|"запуск S1-S4 для studio_id"| PIPE_NORM
+
+    %% Parsers fetch from External
+    P_AMO <-->|"REST API"| AMO
+    P_YC <-->|"REST API"| YC
+    P_GS <-->|"Browser/API"| GS
+
+    %% Parsers → PostgreSQL raw
+    P_AMO -->|"INSERT"| RAW_AMO
+    P_YC -->|"INSERT"| RAW_YC
+    P_GS -->|"INSERT"| RAW_GS
+
+    %% Pipeline S1: читает из raw → пишет в staging
+    PIPE_NORM -->|"SELECT"| RAW_AMO
+    PIPE_NORM -->|"SELECT"| RAW_YC
+    PIPE_NORM -->|"SELECT"| RAW_GS
+    PIPE_NORM -->|"INSERT"| STG_LEADS
+
+    %% Pipeline flow
+    PIPE_NORM -->|"нормализованные данные"| PIPE_REC
+    PIPE_REC -->|"сверенные данные"| PIPE_METRICS
+    PIPE_METRICS -->|"метрики"| PIPE_ALERTS
+    PIPE_METRICS -->|"метрики"| PIPE_REPORTS
+
+    %% Storage flows — Pipeline → PostgreSQL
+    PIPE_METRICS -->|"INSERT"| MET_DAILY
+    PIPE_METRICS -->|"INSERT"| MET_WEEKLY
+    PIPE_METRICS -->|"INSERT"| MET_MONTHLY
+    PIPE_METRICS -->|"INSERT"| MET_CH
+    PIPE_ALERTS -->|"INSERT"| OPS_ALERTS
+    OPS_CFG -.->|"SELECT пороги"| PIPE_ALERTS
+
+    %% Data model references
+    MODELS_LEAD -.->|"schema for"| PIPE_NORM
+    MODELS_STAGE -.->|"schema for"| PIPE_METRICS
+    MODELS_CHANNEL -.->|"schema for"| PIPE_METRICS
+    MODELS_METRIC -.->|"schema for"| MET_DAILY
+    MODELS_ALERT -.->|"schema for"| OPS_ALERTS
+    MODELS_CAMPAIGN -.->|"schema for"| PIPE_METRICS
+
+    %% Reports → Delivery
+    PIPE_REPORTS -->|"ежедневные отчёты"| TG
+    PIPE_REPORTS -->|"еженедельные отчёты"| TG
+    PIPE_REPORTS -->|"ежемесячные отчёты"| TG
+    PIPE_REPORTS -->|"live reports"| CANVAS
+
+    %% Alerts → Delivery (HOTL / HITL)
+    PIPE_ALERTS -->|"HOTL: важные алерты"| TG
+    PIPE_ALERTS -->|"HITL: критические (A04)<br/>+ кнопка подтверждения"| TG
+
+    %% HITL Gate — A04 блокирует pipeline
+    PIPE_ALERTS -->|"создать gate (A04)"| OPS_GATES
+    OPS_GATES -.->|"SELECT незакрытые gates<br/>→ пропуск студии"| ST_ITER
+    TG -.->|"✅ Разобрался<br/>→ UPDATE resolved_at"| OPS_GATES
+
+    %% NL Query flow — фильтр по studio_id
+    CHIEF -->|"NL запрос от Георгия"| NL_INPUT
+    NL_INPUT --> NL_PARSE
+    NL_PARSE --> NL_EXEC
+    NL_EXEC -->|"SELECT (studio_id=X или 'all')"| MET_DAILY
+    NL_EXEC -->|"SELECT (studio_id=X)"| OPS_ALERTS
+    NL_EXEC -->|"ответ per-studio / сводка"| TG
+
+    %% Tools connect to Parsers
+    T_HTTP -.-> P_AMO
+    T_HTTP -.-> P_YC
+    T_BROWSER -.-> P_GS
+    T_CRON -.-> CRON_DAILY
+    T_CRON -.-> CRON_WEEKLY
+    T_CRON -.-> CRON_MONTHLY1
+    T_CRON -.-> CRON_MONTHLY2
+    T_CRON -.-> CRON_MONTHLY3
+    T_CRON -.-> CRON_ALERT
+    T_SANDBOX -.-> P_AMO
+    T_SANDBOX -.-> P_YC
+    T_SANDBOX -.-> P_GS
+
+    %% Cross-agent Integrations (per-studio)
+    PIPE_METRICS -->|"Лиды по каналам<br/>(studio_id)"| OPS
+    PIPE_METRICS -->|"CAC / ROMI<br/>(studio_id)"| FIN
+    PIPE_METRICS -->|"Клиенты по мастерам<br/>(studio_id)"| HR
+    PIPE_METRICS -->|"Качество трафика<br/>(studio_id)"| QUAL
+
+    %% Agent → Agent data sync (per-studio)
+    OPS -.->|"фактические визиты (со студией)"| PIPE_REC
+    FIN -.->|"реальные расходы (со студией)"| PIPE_REC
+    QUAL -.->|"оценка каналов (со студией)"| PIPE_METRICS
+
+    %% ========== LEGEND ==========
+    subgraph LEGEND_BOX["Legend"]
+        L1["Chief-Operator"]:::chief
+        L2["Marketing Agent Core"]:::agent
+        L3["Data Connectors"]:::parser
+        L4["Processing Pipeline"]:::process
+        L5["External Systems"]:::external
+        L6["Data Storage / Models"]:::storage
+        L7["Alerts / Reports"]:::report
+        L8["Cross-Agent Integration"]:::integration
+        L9["OpenCLAW Platform"]:::platform
+    end
+
+    %% Apply styles
+    class CHIEF chief
+    class AGENT,WORKSPACE agent
+    class P_AMO,P_YC,P_GS parser
+    class PIPE_NORM,PIPE_REC,PIPE_METRICS,PIPE_ALERTS,PIPE_REPORTS process
+    class AMO,YC,GS external
+    class TG telegram
+    class RAW_AMO,RAW_YC,RAW_GS,STG_LEADS,STG_CH,MET_DAILY,MET_WEEKLY,MET_MONTHLY,MET_CH,OPS_ALERTS,OPS_GATES,OPS_CFG,OPS_ST storage
+    class MODELS_LEAD,MODELS_STAGE,MODELS_CHANNEL,MODELS_METRIC,MODELS_ALERT,MODELS_CAMPAIGN dataModel
+    class CRON_DAILY,CRON_WEEKLY,CRON_MONTHLY1,CRON_MONTHLY2,CRON_MONTHLY3,CRON_ALERT alert
+    class NL_INPUT,NL_PARSE,NL_EXEC nlQuery
+    class CHANNELS,GATEWAY,ROUTER platform
+    class OPS,FIN,HR,QUAL integration
+    class CANVAS report

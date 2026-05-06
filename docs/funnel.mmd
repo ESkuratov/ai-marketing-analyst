@@ -1,0 +1,62 @@
+%% Воронка продаж: этапы и переходы
+%% Читай сверху вниз
+
+graph TD
+    %% Стили
+    classDef lead fill:#dbeafe,stroke:#60a5fa,color:#1e3a5f
+    classDef active fill:#fef3c7,stroke:#fbbf24,color:#78350f
+    classDef visit fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    classDef success fill:#d1fae5,stroke:#34d399,color:#064e3b
+    classDef closed fill:#fce7f3,stroke:#f472b6,color:#831843
+
+    %% Этапы
+    A[Новая заявка]:::lead
+    B[Переговоры<br>рязанский / люблино]:::active
+    C[Не взяли трубку<br>рязанский / люблино]:::active
+    D[Закрыто и не реализовано]:::closed
+    E[Назначен визит]:::active
+    F[Не пришла]:::visit
+    G[Дошла до 1 записи]:::visit
+    H[Не купила]:::visit
+    I[Внесла залог]:::success
+    J[Успешно реализовано]:::success
+    K[Не продлила]:::closed
+    L[Продлила]:::success
+
+    %% Основные переходы
+    A --> B
+    A --> C
+    A --> D
+
+    C --> D
+    C -->|повторный контакт| B
+
+    B --> E
+    B --> D
+
+    E --> F
+    E --> G
+
+    F -->|повторная запись| E
+    F --> D
+
+    G --> H
+    G --> I
+
+    H -->|пробный период| G
+    H --> D
+
+    I --> J
+
+    J --> K
+    J --> L
+
+    K -->|реактивация| B
+
+    %% Легенда
+    subgraph legend["Источник этапа"]
+        L1["AMO CRM: ведение воронки"]:::lead
+        L2["YClients: запись / посещение"]:::visit
+        L3["Успех / продажа"]:::success
+        L4["Закрытие / потеря"]:::closed
+    end

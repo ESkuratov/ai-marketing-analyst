@@ -1,0 +1,457 @@
+erDiagram
+    %% ============================================================
+    %% ER Diagram: massage_studio (Event-Based Architecture)
+    %% Data Flow: S1 Collect → S2 Process Events → S3 Reconcile → S4 Event Metrics → S5 Alerts
+    %% ============================================================
+
+    classDef source fill:#e8f4f8,stroke:#90c8d9,stroke-width:2px,color:#1a1a2e
+    classDef raw fill:#dbeafe,stroke:#60a5fa,stroke-width:2px,color:#1e3a5f
+    classDef events fill:#fff7ed,stroke:#fb923c,stroke-width:2px,color:#7c2d12
+    classDef staging fill:#d1fae5,stroke:#34d399,stroke-width:2px,color:#064e3b
+    classDef metrics fill:#fef3c7,stroke:#fbbf24,stroke-width:2px,color:#78350f
+    classDef ops fill:#ede9fe,stroke:#a78bfa,stroke-width:2px,color:#4c1d95
+
+    %% ============================================================
+    %% EXTERNAL SOURCES (Источники данных)
+    %% ============================================================
+    AMO_CRM {
+        string domain "xsizeryazp.amocrm.ru"
+        int pipeline_id "9226358"
+        string auth "OAuth2 Bearer"
+        string events_endpoint "/api/v4/leads?filter[updated_at]"
+    }
+
+    YClients_API {
+        int company_id "1234490"
+        string auth "Partner + User Token"
+        string records_endpoint "/api/v1/records/{company_id}"
+    }
+
+    GoogleSheets_Expenses {
+        string sheet_id "gs_sheet_id from ops.studios"
+        string format "CSV export"
+    }
+
+    GoogleSheets_Leads {
+        string sheet_id "GS_LEADS_SHEET_ID from .env"
+        string format "CSV export"
+    }
+
+    %% ============================================================
+    %% RAW SCHEMA (S1: Collect - сырые данные)
+    %% ============================================================
+    raw_amo_leads {
+        bigint id PK "ID сделки в AMO"
+        varchar studio_id PK "studio_a / studio_b"
+        varchar source "amo"
+        varchar status "ID статуса"
+        varchar status_name "Название статуса"
+        varchar utm_source "vk / yandex / site..."
+        varchar utm_campaign "название кампании"
+        varchar utm_medium "cpc / organic / referral"
+        varchar utm_content "объявление / креатив"
+        varchar utm_term "ключевое слово"
+        bigint pipeline_id "9226358"
+        bigint stage_id "этап воронки"
+        bigint responsible_id "ID ответственного"
+        timestamptz created_at "дата создания"
+        timestamptz updated_at "дата обновления"
+        timestamptz closed_at "дата закрытия"
+        numeric price "сумма сделки"
+        varchar name "название сделки"
+        varchar client_name "ФИО клиента"
+        varchar client_phone "нормализован: 7XXXXXXXXXX"
+        bigint client_id "ID контакта в AMO"
+        varchar client_first_name "имя"
+        varchar client_last_name "фамилия"
+        varchar client_email "email"
+        bigint client_responsible_id "ответственный за контакт"
+        jsonb raw_data "полный JSON ответа"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    raw_yc_visits {
+        bigint id PK "ID записи в YClients"
+        varchar studio_id PK "studio_a / studio_b"
+        bigint client_id "ID клиента"
+        varchar client_name "имя клиента"
+        varchar client_phone "нормализован: 7XXXXXXXXXX"
+        bigint service_id "ID услуги"
+        varchar service_name "название услуги"
+        bigint master_id "ID мастера"
+        varchar master_name "имя мастера"
+        date visit_date "дата визита"
+        time visit_time "время визита"
+        numeric sum "стоимость"
+        numeric discount "скидка"
+        varchar status "visited / no_show / canceled"
+        boolean is_first_visit "первый визит?"
+        text comment "комментарий"
+        jsonb raw_data "полный JSON ответа"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    raw_gs_expenses {
+        serial id PK "внутренний ID"
+        varchar studio_id PK "studio_a / studio_b"
+        date expense_date "дата расхода"
+        varchar article "статья расходов"
+        numeric amount "сумма"
+        varchar channel "канал трафика"
+        text description "описание"
+        jsonb raw_data "полный JSON"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    raw_gsheets_leads {
+        serial id PK "внутренний ID"
+        varchar studio_id PK "studio_a / studio_b"
+        bigint deal_id "ID сделки из таблицы"
+        varchar source_name "ВК / РСЯ / Сайт..."
+        varchar utm_source "vk / yandex..."
+        varchar utm_campaign "кампания"
+        varchar client_name "имя клиента"
+        varchar client_phone "нормализован: 7XXXXXXXXXX"
+        varchar studio_name "название студии в таблице"
+        timestamptz created_at "дата создания лида"
+        jsonb raw_data "полный JSON"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    %% ============================================================
+    %% EVENTS SCHEMA (S2c: Process Events - ядро event-based)
+    %% ============================================================
+    staging_lead_events {
+        uuid event_id PK "UUID v4"
+        varchar studio_id "studio_a / studio_b"
+        bigint lead_id "ID из источника"
+        varchar source "amo / yclients / gsheets"
+        uuid client_id FK "UUID клиента"
+        varchar client_phone "нормализованный телефон"
+        varchar event_type "created / status_changed / merged"
+        varchar stage_from "предыдущий статус"
+        varchar stage_to "новый статус"
+        timestamptz event_timestamp "когда произошло событие"
+        timestamptz processed_at "когда записали у нас"
+        jsonb raw_data "полные данные события"
+        varchar validation_status "pending / passed / failed"
+        jsonb validation_errors "[{rule_id, error, severity}]"
+        timestamptz validated_at "время проверки"
+    }
+
+    staging_lead_snapshots {
+        uuid snapshot_id PK "UUID v4"
+        varchar studio_id "studio_a / studio_b"
+        bigint lead_id "ID лида"
+        varchar source "amo / yclients / gsheets"
+        uuid client_id FK "UUID клиента"
+        timestamptz valid_from "начало действия"
+        timestamptz valid_to "конец действия (NULL=текущий)"
+        varchar stage_name "текущий статус"
+        varchar utm_source "источник трафика"
+        numeric amount "сумма"
+        boolean is_first_visit "первый визит?"
+        varchar client_phone "телефон клиента"
+    }
+
+    %% ============================================================
+    %% STAGING SCHEMA (S2: Normalize - производные от событий)
+    %% ============================================================
+    staging_leads_normalized {
+        varchar studio_id PK
+        bigint lead_id PK "ID из источника"
+        varchar source PK "amo / yclients / gsheets"
+        varchar status "текущий статус"
+        varchar funnel_stage "нормализованная стадия"
+        varchar utm_source "источник трафика"
+        varchar utm_campaign "кампания"
+        varchar utm_medium "медиа"
+        varchar utm_content "контент"
+        varchar utm_term "термин"
+        timestamptz created_at "дата создания"
+        timestamptz updated_at "дата обновления"
+        timestamptz closed_at "дата закрытия"
+        bigint yc_booking_id "связь с YClients"
+        date booking_date "дата записи"
+        date visit_date "дата визита"
+        varchar visit_status "статус визита"
+        numeric amount "сумма"
+        varchar abonement_type "тип абонемента"
+        boolean is_repeat "повторный клиент?"
+        boolean is_first_visit "первый визит?"
+        boolean created_by_admin "создано админом?"
+        bigint raw_amo_id FK "→ raw_amo_leads"
+        bigint raw_yc_id FK "→ raw_yc_visits"
+        uuid client_id FK "→ client_profiles"
+        bigint pipeline_id "воронка"
+        bigint stage_id "этап"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    staging_client_profiles {
+        uuid client_id PK "UUID v4"
+        varchar studio_id PK
+        varchar client_phone "уникальный телефон"
+        varchar client_name "ФИО"
+        varchar first_source "первый источник"
+        timestamptz first_seen_at "первая дата"
+        timestamptz last_seen_at "последняя активность"
+        varchar funnel_stage "текущая стадия"
+        int total_visits "всего визитов"
+        numeric total_revenue "общая выручка"
+        timestamptz created_at "дата создания"
+        timestamptz updated_at "дата обновления"
+    }
+
+    %% ============================================================
+    %% METRICS SCHEMA (S4: Event-Based Metrics)
+    %% ============================================================
+    metrics_daily_summary {
+        varchar studio_id PK
+        date summary_date PK
+        varchar channel PK "all / vk / yandex..."
+        int leads_count "лиды"
+        int bookings_count "записи"
+        int visits_count "визиты"
+        int abonements_sold "абонементы"
+        numeric revenue "выручка"
+        numeric conversion_lead_to_booking "конверсия лид→запись"
+        numeric conversion_booking_to_visit "конверсия запись→визит"
+        numeric conversion_visit_to_abon "конверсия визит→абонемент"
+        int no_show_count "неявки"
+        numeric no_show_rate "% неявок"
+        int canceled_count "отмены"
+        numeric canceled_rate "% отмен"
+        int first_visit_count "первые визиты"
+        int repeat_visit_count "повторные визиты"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_weekly_funnel {
+        varchar studio_id PK
+        date week_start PK "понедельник"
+        varchar stage_name PK "этап воронки"
+        int entered_count "вошли на этап"
+        int exited_count "вышли с этапа"
+        numeric conversion "конверсия"
+        int avg_time_on_stage_hours "среднее время на этапе (часы)"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_funnel_transitions {
+        varchar studio_id PK
+        date transition_date PK "дата перехода"
+        varchar stage_from PK "с какого статуса"
+        varchar stage_to PK "на какой статус"
+        int lead_count "кол-во переходов"
+        numeric avg_duration_hours "среднее время на предыдущем этапе"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_lead_stage_durations {
+        varchar studio_id PK
+        date week_start PK "неделя"
+        varchar stage_name PK "этап воронки"
+        numeric avg_duration_hours "среднее время на этапе"
+        numeric median_duration_hours "медианное время"
+        numeric p95_duration_hours "95-й перцентиль"
+        int leads_count "кол-во лидов"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_historical_funnel {
+        varchar studio_id PK
+        date snapshot_date PK "дата среза"
+        varchar stage_name PK "этап воронки"
+        int lead_count "кол-во на этапе"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_monthly_cohorts {
+        varchar studio_id PK
+        date month PK "месяц когорты"
+        date cohort_month PK "месяц привлечения"
+        int client_count "всего клиентов"
+        int active_clients "активные"
+        int lost_clients "потерянные"
+        int returned_clients "вернувшиеся"
+        numeric revenue "выручка"
+        numeric cac "cost per acquisition"
+        numeric ltv "lifetime value"
+        numeric romi "return on marketing investment"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    metrics_channel_roi {
+        varchar studio_id PK
+        date month PK
+        varchar channel PK "vk / yandex / ..."
+        varchar channel_type "organic / paid / social / referral"
+        numeric cost "расходы"
+        numeric revenue "доход"
+        int leads_count "лиды"
+        int bookings_count "записи"
+        int visits_count "визиты"
+        numeric cac "cost per acquisition"
+        numeric ltv "lifetime value"
+        numeric romi "roi"
+        timestamptz loaded_at "время загрузки"
+    }
+
+    %% ============================================================
+    %% OPS SCHEMA (Configuration + Alerts + Gates)
+    %% ============================================================
+    ops_studios {
+        varchar studio_id PK "studio_a / studio_b"
+        varchar name "название студии"
+        bigint yc_company_id "ID в YClients"
+        varchar amo_domain "домен AMO"
+        bigint amo_pipeline_id "ID воронки"
+        varchar gs_sheet_id "ID таблицы расходов"
+        varchar timezone "Europe/Moscow"
+        boolean is_active "активна?"
+        timestamptz created_at "дата создания"
+        timestamptz updated_at "дата обновления"
+    }
+
+    ops_active_alerts {
+        serial id PK
+        varchar studio_id "студия"
+        varchar alert_type "A01 / A02 / A03 / A04 / validation"
+        int rule_id FK "→ stage_validation_rules"
+        uuid event_id FK "→ lead_events"
+        varchar severity "info / warning / critical"
+        varchar metric_name "название метрики"
+        numeric metric_value "значение"
+        numeric threshold "порог"
+        text recommendation "рекомендация"
+        timestamptz created_at "дата создания"
+        timestamptz resolved_at "дата разрешения"
+    }
+
+    ops_gates {
+        serial id PK
+        int alert_id FK "→ active_alerts"
+        varchar studio_id "студия"
+        varchar alert_type "A04"
+        varchar status "open / acknowledged / resolved"
+        varchar ack_by "кто подтвердил"
+        timestamptz created_at "дата создания"
+        timestamptz resolved_at "дата разрешения"
+    }
+
+    ops_config {
+        varchar key PK "название настройки"
+        varchar studio_id PK "all или studio_id"
+        jsonb value "значение (JSON)"
+        text description "описание"
+        timestamptz updated_at "время обновления"
+    }
+
+    ops_funnel_stages {
+        serial stage_id PK
+        varchar studio_id PK "all или studio_id"
+        varchar stage_code "new_lead / negotiation / no_answer / visit_scheduled / no_show / first_visit_complete / not_purchased / deposit_paid / success / no_renewal / renewed / closed_not_realized"
+        varchar stage_name "Название этапа"
+        int stage_order "порядок 1-12"
+        varchar stage_group "new / active / visited / closed_won / closed_lost"
+        jsonb amo_stage_ids "[74087434, 74087430] ID статусов в AMO"
+        jsonb yc_statuses "[confirmed, waiting] статусы YClients"
+        varchar gsheets_column "колонка в Google Sheets"
+        boolean requires_reconcile "нужна проверка между системами?"
+        varchar color "цвет в UI"
+        boolean is_visible "в отчетах?"
+    }
+
+    ops_stage_validation_rules {
+        serial rule_id PK
+        varchar stage_code FK "→ funnel_stages"
+        varchar studio_id "studio_a / studio_b / all"
+        varchar check_system "gsheets / yclients"
+        varchar check_type "phone_exists / status_match / sum_compare / visit_count / timeout"
+        jsonb amo_criteria "{stage_ids: [], timeout_days: null}"
+        jsonb yc_criteria "{statuses: [], min_visits: null, max_days_since: null}"
+        jsonb gsheets_criteria "{required_columns: []}"
+        text alert_template "Шаблон уведомления ТГ"
+        varchar severity "info / warning / critical"
+        boolean is_active "активно?"
+    }
+
+    %% ============================================================
+    %% EVENT-BASED DATA FLOW (Pipeline S1→S5)
+    %% ============================================================
+
+    %% S1: Collect → загрузка сырых данных
+    AMO_CRM ||--o{ raw_amo_leads : "S1: загружает"
+    YClients_API ||--o{ raw_yc_visits : "S1: загружает"
+    GoogleSheets_Expenses ||--o{ raw_gs_expenses : "S1: загружает"
+    GoogleSheets_Leads ||--o{ raw_gsheets_leads : "S1: загружает"
+
+    %% S2: Process Events → ядро event-based
+    raw_amo_leads ||--o{ staging_lead_events : "S2c: генерирует события"
+    raw_yc_visits ||--o{ staging_lead_events : "S2c: генерирует события"
+    raw_gsheets_leads ||--o{ staging_lead_events : "S2c: генерирует события"
+
+    %% Stage mapping + validation rules
+    ops_funnel_stages ||--o{ staging_lead_events : "stage_code mapping"
+    ops_funnel_stages ||--o{ ops_stage_validation_rules : "has validation rules"
+    raw_amo_leads ||--o{ ops_funnel_stages : "amo_stage_id"
+    staging_lead_events ||--o{ ops_stage_validation_rules : "validates against"
+    ops_stage_validation_rules ||--o{ ops_active_alerts : "triggers on failure"
+
+    staging_lead_events ||--o{ staging_lead_snapshots : "S2c: создает версии"
+    staging_client_profiles ||--o{ staging_lead_events : "client_id matching"
+    staging_client_profiles ||--o{ staging_lead_snapshots : "client_id matching"
+    staging_lead_snapshots ||--o{ staging_leads_normalized : "S2: текущее состояние"
+
+    %% S3: Reconcile → проверка событий
+    staging_lead_events ||--o{ ops_active_alerts : "S3: проверка консистентности"
+
+    %% S4: Event-Based Metrics → метрики из событий
+    staging_lead_events ||--o{ metrics_funnel_transitions : "S4: переходы"
+    staging_lead_events ||--o{ metrics_lead_stage_durations : "S4: время на этапе"
+    staging_lead_events ||--o{ metrics_historical_funnel : "S4: срез на дату"
+    staging_lead_snapshots ||--o{ metrics_historical_funnel : "S4: срез состояния"
+
+    %% Snapshot metrics (остаются для быстрых отчетов)
+    staging_leads_normalized ||--o{ metrics_daily_summary : "S4: быстрые отчеты"
+    staging_leads_normalized ||--o{ metrics_weekly_funnel : "S4: текущая воронка"
+    staging_leads_normalized ||--o{ metrics_monthly_cohorts : "S4: когорты"
+    staging_leads_normalized ||--o{ metrics_channel_roi : "S4: каналы"
+    raw_gs_expenses ||--o{ metrics_channel_roi : "S4: расходы"
+
+    %% S5: Alerts → реакция на события
+    metrics_funnel_transitions ||--o{ ops_active_alerts : "S5a: A01-A04"
+    metrics_lead_stage_durations ||--o{ ops_active_alerts : "S5a: bottleneck detection"
+    metrics_channel_roi ||--o{ ops_active_alerts : "S5a: A03"
+    ops_active_alerts ||--o| ops_gates : "S5a: A04 creates gate"
+
+    %% Ownership
+    ops_studios ||--o{ raw_amo_leads : "owns"
+    ops_studios ||--o{ raw_yc_visits : "owns"
+    ops_studios ||--o{ raw_gs_expenses : "owns"
+    ops_studios ||--o{ staging_lead_events : "owns"
+    ops_studios ||--o{ staging_lead_snapshots : "owns"
+    ops_studios ||--o{ staging_leads_normalized : "partition"
+    ops_studios ||--o{ staging_client_profiles : "partition"
+    ops_studios ||--o{ metrics_funnel_transitions : "owns"
+    ops_studios ||--o{ metrics_lead_stage_durations : "owns"
+    ops_studios ||--o{ metrics_historical_funnel : "owns"
+    ops_studios ||--o{ metrics_daily_summary : "partition"
+    ops_studios ||--o{ metrics_weekly_funnel : "partition"
+    ops_studios ||--o{ metrics_monthly_cohorts : "partition"
+    ops_studios ||--o{ metrics_channel_roi : "partition"
+    ops_studios ||--o{ ops_active_alerts : "generates"
+    ops_studios ||--o{ ops_gates : "controls"
+    ops_studios ||--o{ ops_config : "settings"
+
+    %% ============================================================
+    %% Apply Styles
+    %% ============================================================
+    class AMO_CRM,YClients_API,GoogleSheets_Expenses,GoogleSheets_Leads source
+    class raw_amo_leads,raw_yc_visits,raw_gs_expenses,raw_gsheets_leads raw
+    class staging_lead_events,staging_lead_snapshots events
+    class staging_leads_normalized,staging_client_profiles staging
+    class metrics_daily_summary,metrics_weekly_funnel,metrics_funnel_transitions,metrics_lead_stage_durations,metrics_historical_funnel,metrics_monthly_cohorts,metrics_channel_roi metrics
+    class ops_studios,ops_active_alerts,ops_gates,ops_config,ops_funnel_stages,ops_stage_validation_rules ops
+
