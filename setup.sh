@@ -403,29 +403,26 @@ install_deps() {
     return
   fi
 
-  local pip_cmd=""
+  local pip_cmd pip_flags
   if [[ ! -d "${VENV_DIR}" ]]; then
     info "Creating virtual environment..."
     if python3 -m venv "${VENV_DIR}" 2>/dev/null; then
       pip_cmd="${VENV_DIR}/bin/pip"
+      pip_flags=""
     else
       warn "python3-venv not available — installing without virtual environment"
       PY_CMD="python3"
-      pip_cmd="pip3 install --break-system-packages --user"
+      pip_cmd="pip3"
+      pip_flags="--break-system-packages --user"
     fi
   else
     pip_cmd="${VENV_DIR}/bin/pip"
+    pip_flags=""
   fi
 
-  if [[ "${pip_cmd}" == "${VENV_DIR}/bin/pip" ]]; then
-    "${VENV_DIR}/bin/pip" install -r "${SKILL_DIR}/requirements.txt" -q \
-      && success "Packages installed (venv: ${VENV_DIR})" \
-      || warn "pip failed — run manually: ${VENV_DIR}/bin/pip install -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
-  else
-    ${pip_cmd} install -r "${SKILL_DIR}/requirements.txt" -q \
-      && success "Packages installed (user)" \
-      || warn "pip failed — run manually: pip3 install --break-system-packages --user -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
-  fi
+  ${pip_cmd} install ${pip_flags} -r "${SKILL_DIR}/requirements.txt" -q \
+    && success "Packages installed" \
+    || warn "pip failed — run manually: ${pip_cmd} install ${pip_flags} -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
 }
 
 # ── 6. YClients API tokens ────────────────────────────────────
