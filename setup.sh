@@ -664,20 +664,24 @@ test_amo_connection() {
     info "AMO_BASE_URL not set — skipping connection test"
     return
   fi
-  if [[ -z "${token}" ]]; then
-    info "AMO_TOKEN not set — получен через OAuth позже, пропускаем проверку"
-    return
-  fi
 
   step "AMO CRM connection test"
   local rc
-  rc=$(curl -s -o /dev/null -w "%{http_code}" "${base_url}/api/v4/account" \
-    -H "Authorization: Bearer ${token}" 2>/dev/null) || rc=000
+  if [[ -n "${token}" ]]; then
+    rc=$(curl -s -o /dev/null -w "%{http_code}" "${base_url}/api/v4/account" \
+      -H "Authorization: Bearer ${token}" 2>/dev/null) || rc=000
+  else
+    rc=$(curl -s -o /dev/null -w "%{http_code}" "${base_url}/api/v4/account" 2>/dev/null) || rc=000
+  fi
 
   if [[ "${rc}" == "200" ]]; then
     success "AMO CRM connection OK (${base_url})"
+  elif [[ "${rc}" == "401" ]] && [[ -z "${token}" ]]; then
+    warn "AMO CRM host reachable, но AMO_TOKEN не получен (требуется OAuth)"
+  elif [[ "${rc}" == "401" ]]; then
+    warn "AMO CRM host reachable, но токен недействителен (HTTP 401)"
   else
-    warn "AMO CRM connection failed (HTTP ${rc}) — проверьте AMO_BASE_URL и AMO_TOKEN"
+    warn "AMO CRM connection failed (HTTP ${rc}) — проверьте AMO_BASE_URL"
   fi
 }
 
