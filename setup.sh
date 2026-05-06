@@ -405,21 +405,31 @@ install_deps() {
     info "Creating virtual environment..."
     if python3 -m venv "${VENV_DIR}" 2>/dev/null; then
       pip_cmd="${VENV_DIR}/bin/pip"
-      pip_flags=""
+      pip_flags="-q"
     else
       warn "python3-venv not available — installing without virtual environment"
       PY_CMD="python3"
-      pip_cmd="pip3"
-      pip_flags="--break-system-packages"
+      pip_flags="--break-system-packages -q"
+      # Найти доступный pip
+      if command -v pip3 &>/dev/null; then
+        pip_cmd="pip3"
+      elif command -v pip &>/dev/null; then
+        pip_cmd="pip"
+      else
+        pip_cmd="python3 -m pip"
+      fi
     fi
   else
     pip_cmd="${VENV_DIR}/bin/pip"
-    pip_flags=""
+    pip_flags="-q"
   fi
 
-  ${pip_cmd} install ${pip_flags} -r "${SKILL_DIR}/requirements.txt" -q \
-    && success "Packages installed" \
-    || warn "pip failed — run manually: ${pip_cmd} install ${pip_flags} -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
+  if ${pip_cmd} install ${pip_flags} -r "${SKILL_DIR}/requirements.txt"; then
+    success "Packages installed"
+  else
+    warn "pip failed — run manually:"
+    info "  ${pip_cmd} install ${pip_flags} -r ${SKILL_DIR}/requirements.txt"
+  fi
 
   # Проверяем, что ключевой модуль импортируется
   if ! ${PY_CMD} -c "from dotenv import load_dotenv" 2>/dev/null; then
@@ -811,7 +821,7 @@ setup_initial_data() {
   # Проверить, что python-зависимости установлены
   if ! ${PY_CMD} -c "from dotenv import load_dotenv; import psycopg2" 2>/dev/null; then
     warn "Python-зависимости не установлены. Установите и повторите:"
-    info "  pip install -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
+    info "  pip install --break-system-packages -r ${SKILL_DIR}/requirements.txt"
     return
   fi
 
