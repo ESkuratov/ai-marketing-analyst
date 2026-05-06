@@ -345,7 +345,7 @@ setup_db() {
         break
       else
         warn "Cannot connect to PostgreSQL with: ${DB_URL}"
-        echo "  ${DIM}${psql_err}${NC}"
+        echo -e "  ${DIM}${psql_err}${NC}"
         read -p "  Try again? [Y/n]: " -n 1 -r
         echo
         if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
