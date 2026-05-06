@@ -49,12 +49,12 @@ step()    { echo -e "\n${MAGENTA}▸${NC} ${BOLD}$*${NC}"; }
 # ── Paths ──────────────────────────────────────────────────────
 AGENT_ID="marketing-analyst"
 AGENT_SOURCE_DIR="${PROJECT_DIR}/.agent/${AGENT_ID}"
-SKILL_DIR="${AGENT_SOURCE_DIR}/.skills/marketing-pipeline"
+SKILL_DIR="${AGENT_SOURCE_DIR}/skills/marketing-pipeline"
 
 OPENCLAW_HOME="${HOME}/.openclaw"
 OPENCLAW_CONFIG="${OPENCLAW_HOME}/openclaw.json"
 WORKSPACE_DIR="${OPENCLAW_HOME}/workspace-${AGENT_ID}"
-SKILL_DEST="${WORKSPACE_DIR}/.skills/marketing-pipeline"
+SKILL_DEST="${WORKSPACE_DIR}/skills/marketing-pipeline"
 VENV_DIR="${WORKSPACE_DIR}/.venv"
 PY_CMD="${VENV_DIR}/bin/python"
 
@@ -285,7 +285,7 @@ deploy_workspace() {
   # === Pipeline skill (self-contained, со всеми скриптами) ===
   run mkdir -p "${SKILL_DEST}"
   run cp -r "${SKILL_DIR}/." "${SKILL_DEST}/"
-  success "Pipeline skill deployed → .skills/marketing-pipeline/ (connectors, pipeline, telegram, migrations)"
+  success "Pipeline skill deployed → skills/marketing-pipeline/ (connectors, pipeline, telegram, migrations)"
 
   # === .env ===
   run cp "${AGENT_SOURCE_DIR}/.env.example" "${WORKSPACE_DIR}/.env.example"
@@ -1035,7 +1035,7 @@ summary() {
   echo "  Agent:      ${AGENT_ID}"
   echo "  DB:         ${DB_URL}"
   echo "  Workspace:  ${WORKSPACE_DIR}"
-  echo "  Skill:      .skills/marketing-pipeline/"
+  echo "  Skill:      skills/marketing-pipeline/"
   echo "              ├── SKILL.md"
   echo "              ├── connectors/    (S1 Collect)"
   echo "              ├── pipeline/      (S2→S5b Normalize→Reports)"
