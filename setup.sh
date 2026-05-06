@@ -742,10 +742,6 @@ setup_gs_leads() {
 setup_initial_data() {
   step "Initial data load"
 
-  if [[ "${PSQL_AVAILABLE}" != true ]]; then
-    retry_psql || { warn "Skipping initial data load"; return; }
-  fi
-
   if [[ "${AUTO}" == true ]]; then
     info "Skipping (use --auto, run connectors manually)"
     return
@@ -758,6 +754,12 @@ setup_initial_data() {
   if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
     info "Initial data load skipped"
     return
+  fi
+
+  if [[ "${PSQL_AVAILABLE}" != true ]]; then
+    echo ""
+    warn "PostgreSQL не подключён — данные будут загружены из источников, но не сохранены в БД."
+    retry_psql || true
   fi
 
   echo ""
@@ -784,6 +786,14 @@ setup_initial_data() {
 
   if [[ "${DRY_RUN}" == true ]]; then
     info "Would run: ${py_cmd} --date-from=${DATE_FROM} --date-to=${DATE_TO}"
+    return
+  fi
+
+  if [[ "${PSQL_AVAILABLE}" != true ]]; then
+    warn "БД не подключена — загрузка данных пропущена."
+    echo ""
+    info "Настройте PostgreSQL, затем запустите вручную:"
+    info "  ${py_cmd} --date-from=${DATE_FROM} --date-to=${DATE_TO}"
     return
   fi
 
