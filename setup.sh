@@ -903,10 +903,7 @@ setup_cron() {
   for job in "${jobs[@]}"; do
     IFS='|' read -r name cron message <<< "${job}"
 
-    local existing
-    existing=$(openclaw cron list --json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print([j['id'] for j in data if j.get('name')=='${name}'])" 2>/dev/null || true)
-
-    if [[ -n "${existing}" ]] && [[ "${existing}" != "[]" ]]; then
+    if openclaw cron list 2>/dev/null | grep -q "${name}"; then
       info "Cron job '${name}' already exists, skipping"
       ((skipped += 1))
       continue
