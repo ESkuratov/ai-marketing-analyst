@@ -58,6 +58,13 @@ SKILL_DEST="${WORKSPACE_DIR}/.skills/marketing-pipeline"
 VENV_DIR="${WORKSPACE_DIR}/.venv"
 PY_CMD="${VENV_DIR}/bin/python"
 
+# Cross-platform sed in-place (BSD sed -i '', GNU sed -i)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  SED_INPLACE=(sed -i '')
+else
+  SED_INPLACE=(sed -i)
+fi
+
 DB_URL="${DATABASE_URL:-postgresql://localhost:5432/massage_studio}"
 MODEL="${MODEL:-claude-sonnet-4-20250514}"
 AUTO=false
@@ -362,7 +369,7 @@ setup_db() {
 
   if [[ "${DRY_RUN}" != true ]]; then
     if [[ -f "${env_file}" ]] && grep -q "DATABASE_URL" "${env_file}" 2>/dev/null; then
-      sed -i '' "s|DATABASE_URL=.*|DATABASE_URL=${DB_URL}|" "${env_file}" 2>/dev/null || true
+      "${SED_INPLACE[@]}" "s|DATABASE_URL=.*|DATABASE_URL=${DB_URL}|" "${env_file}" 2>/dev/null || true
     else
       mkdir -p "$(dirname "${env_file}")"
       echo "DATABASE_URL=${DB_URL}" >> "${env_file}"
@@ -499,12 +506,12 @@ setup_yc_tokens() {
     echo "YC_USER_TOKEN=${YC_USER}" >> "${env_file}"
   else
     if grep -q '^YC_BEARER_TOKEN=' "${env_file}" 2>/dev/null; then
-      sed -i '' "s|^YC_BEARER_TOKEN=.*|YC_BEARER_TOKEN=${YC_BEARER}|" "${env_file}"
+      "${SED_INPLACE[@]}" "s|^YC_BEARER_TOKEN=.*|YC_BEARER_TOKEN=${YC_BEARER}|" "${env_file}"
     else
       echo "YC_BEARER_TOKEN=${YC_BEARER}" >> "${env_file}"
     fi
     if grep -q '^YC_USER_TOKEN=' "${env_file}" 2>/dev/null; then
-      sed -i '' "s|^YC_USER_TOKEN=.*|YC_USER_TOKEN=${YC_USER}|" "${env_file}"
+      "${SED_INPLACE[@]}" "s|^YC_USER_TOKEN=.*|YC_USER_TOKEN=${YC_USER}|" "${env_file}"
     else
       echo "YC_USER_TOKEN=${YC_USER}" >> "${env_file}"
     fi
@@ -568,7 +575,7 @@ setup_gs_leads() {
     echo "GS_LEADS_SHEET_ID=${GS_SHEET}" > "${env_file}"
   else
     if grep -q '^GS_LEADS_SHEET_ID=' "${env_file}" 2>/dev/null; then
-      sed -i '' "s|^GS_LEADS_SHEET_ID=.*|GS_LEADS_SHEET_ID=${GS_SHEET}|" "${env_file}"
+      "${SED_INPLACE[@]}" "s|^GS_LEADS_SHEET_ID=.*|GS_LEADS_SHEET_ID=${GS_SHEET}|" "${env_file}"
     else
       echo "GS_LEADS_SHEET_ID=${GS_SHEET}" >> "${env_file}"
     fi
