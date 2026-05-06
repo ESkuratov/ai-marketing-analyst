@@ -108,8 +108,7 @@ install_psql_if_needed() {
     info "AUTO mode: attempting automatic installation..."
   else
     echo "  PostgreSQL client (psql) is required for database migrations."
-    read -p "  Install automatically? [Y/n]: " -n 1 -r
-    echo
+    read -p "  Install automatically? [Y/n]: "
     if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
       # Show manual install command and give one more chance
       local os_hint=""
@@ -131,8 +130,7 @@ install_psql_if_needed() {
         info "Download: https://www.postgresql.org/download/"
       fi
       echo ""
-      read -p "  Установили? Проверить снова? [y/N]: " -n 1 -r
-      echo
+      read -p "  Установили? Проверить снова? [y/N]: "
       if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
         if command -v psql &>/dev/null; then
           success "psql now available"
@@ -166,7 +164,7 @@ install_psql_if_needed() {
       info "Installing PostgreSQL client via dnf..."
       sudo dnf install -y postgresql
     else
-      error "Package manager not found. Please install PostgreSQL client manually."
+      error "Package manager not found. Please install PostgreSQL manually."
       return 1
     fi
   else
@@ -210,8 +208,7 @@ retry_psql() {
     info "Download: https://www.postgresql.org/download/"
   fi
   echo ""
-  read -p "  Установили? Проверить снова? [y/N]: " -n 1 -r
-  echo
+  read -p "  Установили? Проверить снова? [y/N]: "
   if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
     if command -v psql &>/dev/null; then
       PSQL_AVAILABLE=true
@@ -355,8 +352,7 @@ setup_db() {
       else
         warn "Cannot connect to PostgreSQL with: ${DB_URL}"
         echo -e "  ${DIM}${psql_err}${NC}"
-        read -p "  Try again? [Y/n]: " -n 1 -r
-        echo
+        read -p "  Try again? [Y/n]: "
         if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
           warn "Migrations will be skipped."
           PSQL_AVAILABLE=false
@@ -462,8 +458,7 @@ setup_yc_tokens() {
 
   if [[ -n "${existing_bearer}" ]]; then
     info "YC_BEARER_TOKEN already set (${existing_bearer:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Partner token: " YC_BEARER
       YC_BEARER="${YC_BEARER:-${existing_bearer}}"
     else
@@ -475,8 +470,7 @@ setup_yc_tokens() {
 
   if [[ -n "${existing_user}" ]]; then
     info "YC_USER_TOKEN already set (${existing_user:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  User token: " YC_USER
       YC_USER="${YC_USER:-${existing_user}}"
     else
@@ -575,8 +569,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_base_url}" ]]; then
     info "AMO_BASE_URL: ${existing_base_url}"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  AMO CRM URL (https://{subdomain}.amocrm.ru): " AMO_URL
       AMO_URL="${AMO_URL:-${existing_base_url}}"
     else
@@ -588,8 +581,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_id}" ]]; then
     info "AMO_INTEGRATION_ID already set (${existing_id:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Integration ID (Client ID): " AMO_ID
       AMO_ID="${AMO_ID:-${existing_id}}"
     else
@@ -601,8 +593,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_secret}" ]]; then
     info "AMO_SECRET_KEY already set (${existing_secret:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Secret Key (Client Secret): " AMO_SECRET
       AMO_SECRET="${AMO_SECRET:-${existing_secret}}"
     else
@@ -701,8 +692,7 @@ setup_gs_leads() {
 
   if [[ -n "${existing_sheet_id}" ]]; then
     info "GS_LEADS_SHEET_ID: ${existing_sheet_id}"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Google Sheet ID (из URL /d/{ID}/edit): " GS_SHEET
       GS_SHEET="${GS_SHEET:-${existing_sheet_id}}"
     else
@@ -749,8 +739,7 @@ setup_initial_data() {
 
   echo ""
   echo "  Хотите загрузить реальные данные из AMO CRM, YClients и Google Sheets?"
-  read -p "  Загрузить начальные данные? [y/N]: " -n 1 -r
-  echo
+  read -p "  Загрузить начальные данные? [y/N]: "
   if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
     info "Initial data load skipped"
     return
