@@ -807,6 +807,13 @@ setup_initial_data() {
     return
   fi
 
+  # Проверить, что python-зависимости установлены
+  if ! ${PY_CMD} -c "from dotenv import load_dotenv; import psycopg2" 2>/dev/null; then
+    warn "Python-зависимости не установлены. Установите и повторите:"
+    info "  pip install -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
+    return
+  fi
+
   if [[ "${PSQL_AVAILABLE}" != true ]]; then
     warn "БД не подключена — загрузка данных пропущена."
     echo ""
