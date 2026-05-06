@@ -641,6 +641,16 @@ setup_amo_crm() {
     fi
   done
   success "AMO CRM credentials saved to ${env_file}"
+
+  # Обновить amo_domain у всех существующих студий
+  if [[ -n "${AMO_URL}" ]] && [[ "${PSQL_AVAILABLE}" == true ]]; then
+    psql "${DB_URL}" -c "
+      UPDATE ops.studios
+      SET amo_domain = regexp_replace('${AMO_URL}', 'https?://([^.]+)\\.amocrm\\.ru.*', '\\1'),
+          updated_at = NOW()
+      WHERE amo_domain IS NULL
+    " 2>/dev/null || true
+  fi
 }
 
 # ── Test AMO CRM connection ────────────────────────────────
@@ -822,7 +832,19 @@ setup_studio() {
   read -p "  Studio ID [studio_a]: " STUDIO_ID; STUDIO_ID="${STUDIO_ID:-studio_a}"
   read -p "  Name [Моя студия]: " STUDIO_NAME; STUDIO_NAME="${STUDIO_NAME:-Моя студия}"
   read -p "  YClients company ID (optional): " YC_ID
-  read -p "  AMO CRM domain (optional): " AMO_DOMAIN
+
+  # AMO domain берётся из настроек AMO CRM (шаг 7)
+  local amo_val="NULL"
+  if [[ -f "${WORKSPACE_DIR}/.env" ]]; then
+    local amo_url
+    amo_url=$(grep -E '^AMO_BASE_URL=' "${WORKSPACE_DIR}/.env" 2>/dev/null | cut -d'=' -f2- || true)
+    if [[ -n "${amo_url}" ]]; then
+      local amo_domain
+      amo_domain=$(echo "${amo_url}" | sed 's|https\?://\([^.]*\)\.amocrm\.ru.*|\1|')
+      amo_val="'${amo_domain}'"
+      info "AMO domain: ${amo_domain} (из AMO CRM настроек)"
+    fi
+  fi
 
   if [[ "${DRY_RUN}" == true ]]; then
     info "Would insert studio '${STUDIO_ID}' into ops.studios"
@@ -831,9 +853,7 @@ setup_studio() {
 
   # Quote string values for SQL, use NULL for empty
   local yc_val="NULL"
-  local amo_val="NULL"
-  [[ -n "${YC_ID}" ]]      && yc_val="${YC_ID}"
-  [[ -n "${AMO_DOMAIN}" ]] && amo_val="'${AMO_DOMAIN}'"
+  [[ -n "${YC_ID}" ]] && yc_val="${YC_ID}"
 
   psql "${DB_URL}" -c "
     INSERT INTO ops.studios (studio_id, name, yc_company_id, amo_domain, timezone)
