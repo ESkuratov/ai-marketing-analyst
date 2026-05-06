@@ -622,6 +622,34 @@ setup_amo_crm() {
   success "AMO CRM credentials saved to ${env_file}"
 }
 
+# ── Test AMO CRM connection ────────────────────────────────
+test_amo_connection() {
+  local env_file="${WORKSPACE_DIR}/.env"
+  local base_url token
+  base_url=$(grep -E '^AMO_BASE_URL=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+  token=$(grep -E '^AMO_TOKEN=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+
+  if [[ -z "${base_url}" ]]; then
+    info "AMO_BASE_URL not set — skipping connection test"
+    return
+  fi
+  if [[ -z "${token}" ]]; then
+    info "AMO_TOKEN not set — получен через OAuth позже, пропускаем проверку"
+    return
+  fi
+
+  step "AMO CRM connection test"
+  local rc
+  rc=$(curl -s -o /dev/null -w "%{http_code}" "${base_url}/api/v4/account" \
+    -H "Authorization: Bearer ${token}" 2>/dev/null) || rc=000
+
+  if [[ "${rc}" == "200" ]]; then
+    success "AMO CRM connection OK (${base_url})"
+  else
+    warn "AMO CRM connection failed (HTTP ${rc}) — проверьте AMO_BASE_URL и AMO_TOKEN"
+  fi
+}
+
 # ── 8. Google Sheets Leads Sheet ID ──────────────────────────
 setup_gs_leads() {
   step "Google Sheets Leads Sheet ID"
@@ -686,7 +714,7 @@ setup_gs_leads() {
   success "GS_LEADS_SHEET_ID saved to ${env_file}"
 }
 
-# ── 8. Initial data load ─────────────────────────────────────
+# ── 9. Initial data load ─────────────────────────────────────
 setup_initial_data() {
   step "Initial data load"
 
@@ -745,7 +773,7 @@ setup_initial_data() {
   info "  PYTHONPATH=${SKILL_DEST} ${PY_CMD} ${SKILL_DEST}/pipeline/run_pipeline.py --all-studios"
 }
 
-# ── 9. Studio setup ────────────────────────────────────────────
+# ── 10. Studio setup ────────────────────────────────────────────
 setup_studio() {
   step "Studio setup"
 
@@ -780,7 +808,7 @@ setup_studio() {
   eval "${CMD}" && success "Studio '${STUDIO_ID}' added" || warn "Studio setup failed — add later via add_studio.py"
 }
 
-# ── 10. Cron jobs ──────────────────────────────────────────────────
+# ── 11. Cron jobs ──────────────────────────────────────────────────
 setup_cron() {
   step "Cron jobs"
 
@@ -844,7 +872,7 @@ setup_cron() {
   fi
 }
 
-# ── 11. Telegram bot setup ─────────────────────────────────────
+# ── 12. Telegram bot setup ─────────────────────────────────────
 setup_telegram() {
   step "Telegram bot"
 
@@ -982,6 +1010,8 @@ main() {
   run_migrations
   install_deps
   setup_yc_tokens
+  setup_amo_crm
+  test_amo_connection
   setup_gs_leads
   setup_initial_data
   setup_studio
