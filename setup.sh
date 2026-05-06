@@ -516,7 +516,113 @@ setup_yc_tokens() {
   success "YC tokens saved to ${env_file}"
 }
 
-# ── 7. Google Sheets Leads Sheet ID ──────────────────────────
+# ── 7. AMO CRM credentials ──────────────────────────────────
+setup_amo_crm() {
+  step "AMO CRM credentials"
+
+  local env_file="${WORKSPACE_DIR}/.env"
+  if [[ ! -f "${env_file}" ]]; then
+    if [[ -f "${WORKSPACE_DIR}/.env.example" ]]; then
+      cp "${WORKSPACE_DIR}/.env.example" "${env_file}"
+    fi
+  fi
+
+  local existing_base_url="" existing_id="" existing_secret=""
+  if [[ -f "${env_file}" ]]; then
+    existing_base_url=$(grep -E '^AMO_BASE_URL=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+    existing_id=$(grep -E '^AMO_INTEGRATION_ID=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+    existing_secret=$(grep -E '^AMO_SECRET_KEY=' "${env_file}" 2>/dev/null | cut -d'=' -f2- || true)
+  fi
+
+  if [[ "${AUTO}" == true ]]; then
+    if [[ -n "${existing_id}" ]] && [[ -n "${existing_secret}" ]]; then
+      info "AMO CRM credentials already set in .env"
+    else
+      info "Skipping (use --auto, set AMO_INTEGRATION_ID and AMO_SECRET_KEY in .env)"
+    fi
+    return
+  fi
+
+  echo ""
+  echo "  AMO CRM — интеграция через OAuth2 Client."
+  echo "  Данные берутся из настроек интеграции:"
+  echo "    https://{domain}.amocrm.ru/settings/widgets/"
+  echo ""
+
+  if [[ -n "${existing_base_url}" ]]; then
+    info "AMO_BASE_URL: ${existing_base_url}"
+    read -p "  Change? [y/N]: " -n 1 -r; echo
+    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+      read -p "  AMO CRM URL (https://{subdomain}.amocrm.ru): " AMO_URL
+      AMO_URL="${AMO_URL:-${existing_base_url}}"
+    else
+      AMO_URL="${existing_base_url}"
+    fi
+  else
+    read -p "  AMO CRM URL (https://{subdomain}.amocrm.ru): " AMO_URL
+  fi
+
+  if [[ -n "${existing_id}" ]]; then
+    info "AMO_INTEGRATION_ID already set (${existing_id:0:10}...)"
+    read -p "  Change? [y/N]: " -n 1 -r; echo
+    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+      read -p "  Integration ID (Client ID): " AMO_ID
+      AMO_ID="${AMO_ID:-${existing_id}}"
+    else
+      AMO_ID="${existing_id}"
+    fi
+  else
+    read -p "  Integration ID (Client ID): " AMO_ID
+  fi
+
+  if [[ -n "${existing_secret}" ]]; then
+    info "AMO_SECRET_KEY already set (${existing_secret:0:10}...)"
+    read -p "  Change? [y/N]: " -n 1 -r; echo
+    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+      read -p "  Secret Key (Client Secret): " AMO_SECRET
+      AMO_SECRET="${AMO_SECRET:-${existing_secret}}"
+    else
+      AMO_SECRET="${existing_secret}"
+    fi
+  else
+    read -p "  Secret Key (Client Secret): " AMO_SECRET
+  fi
+
+  if [[ -z "${AMO_ID}" ]] || [[ -z "${AMO_SECRET}" ]]; then
+    warn "AMO CRM credentials not provided — set manually in ${env_file}"
+    return
+  fi
+
+  echo ""
+  echo "  После получения Authorization Code через OAuth, укажите:"
+  echo "  (можно оставить пустым и заполнить позже в .env)"
+  read -p "  Token: " AMO_TOKEN
+  read -p "  Refresh Token: " AMO_REFRESH_TOKEN
+
+  if [[ "${DRY_RUN}" == true ]]; then
+    info "Would save AMO CRM credentials to ${env_file}"
+    return
+  fi
+
+  mkdir -p "${WORKSPACE_DIR}"
+
+  local vars=(AMO_BASE_URL AMO_INTEGRATION_ID AMO_SECRET_KEY AMO_CLIENT_ID AMO_CLIENT_SECRET AMO_TOKEN AMO_REFRESH_TOKEN AMO_REDIRECT_URI)
+  local vals=("${AMO_URL}" "${AMO_ID}" "${AMO_SECRET}" "${AMO_ID}" "${AMO_SECRET}" "${AMO_TOKEN}" "${AMO_REFRESH_TOKEN}" "https://example.com")
+
+  for i in "${!vars[@]}"; do
+    local var="${vars[$i]}"
+    local val="${vals[$i]}"
+    [[ -z "${val}" ]] && continue
+    if ! grep -q "^${var}=" "${env_file}" 2>/dev/null; then
+      echo "${var}=${val}" >> "${env_file}"
+    else
+      "${SED_INPLACE[@]}" "s|^${var}=.*|${var}=${val}|" "${env_file}"
+    fi
+  done
+  success "AMO CRM credentials saved to ${env_file}"
+}
+
+# ── 8. Google Sheets Leads Sheet ID ──────────────────────────
 setup_gs_leads() {
   step "Google Sheets Leads Sheet ID"
 
