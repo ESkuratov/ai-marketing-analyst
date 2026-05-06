@@ -410,7 +410,7 @@ install_deps() {
       warn "python3-venv not available — installing without virtual environment"
       PY_CMD="python3"
       pip_cmd="pip3"
-      pip_flags="--break-system-packages --user"
+      pip_flags="--break-system-packages"
     fi
   else
     pip_cmd="${VENV_DIR}/bin/pip"
