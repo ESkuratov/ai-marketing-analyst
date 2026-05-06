@@ -467,8 +467,7 @@ setup_yc_tokens() {
 
   if [[ -n "${existing_bearer}" ]]; then
     info "YC_BEARER_TOKEN already set (${existing_bearer:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Partner token: " YC_BEARER
       YC_BEARER="${YC_BEARER:-${existing_bearer}}"
     else
@@ -480,8 +479,7 @@ setup_yc_tokens() {
 
   if [[ -n "${existing_user}" ]]; then
     info "YC_USER_TOKEN already set (${existing_user:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  User token: " YC_USER
       YC_USER="${YC_USER:-${existing_user}}"
     else
@@ -580,8 +578,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_base_url}" ]]; then
     info "AMO_BASE_URL: ${existing_base_url}"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  AMO CRM URL (https://{subdomain}.amocrm.ru): " AMO_URL
       AMO_URL="${AMO_URL:-${existing_base_url}}"
     else
@@ -593,8 +590,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_id}" ]]; then
     info "AMO_INTEGRATION_ID already set (${existing_id:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Integration ID (Client ID): " AMO_ID
       AMO_ID="${AMO_ID:-${existing_id}}"
     else
@@ -606,8 +602,7 @@ setup_amo_crm() {
 
   if [[ -n "${existing_secret}" ]]; then
     info "AMO_SECRET_KEY already set (${existing_secret:0:10}...)"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Secret Key (Client Secret): " AMO_SECRET
       AMO_SECRET="${AMO_SECRET:-${existing_secret}}"
     else
@@ -720,8 +715,7 @@ setup_gs_leads() {
 
   if [[ -n "${existing_sheet_id}" ]]; then
     info "GS_LEADS_SHEET_ID: ${existing_sheet_id}"
-    read -p "  Change? [y/N]: " -n 1 -r; echo
-    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    read -p "  Change? [y/N]: "    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
       read -p "  Google Sheet ID (из URL /d/{ID}/edit): " GS_SHEET
       GS_SHEET="${GS_SHEET:-${existing_sheet_id}}"
     else
