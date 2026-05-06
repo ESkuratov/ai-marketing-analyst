@@ -835,26 +835,27 @@ setup_cron() {
 
     if [[ -n "${existing}" ]] && [[ "${existing}" != "[]" ]]; then
       info "Cron job '${name}' already exists, skipping"
-      ((skipped++))
+      ((skipped += 1))
       continue
     fi
 
     if [[ "${DRY_RUN}" == true ]]; then
       info "Would create: openclaw cron add --name ${name} --cron \"${cron}\" --agent ${AGENT_ID} --session isolated --message \"${message:0:50}...\""
-      ((skipped++))
+      ((skipped += 1))
       continue
     fi
 
-    openclaw cron add \
-      --name "${name}" \
-      --cron "${cron}" \
-      --agent "${AGENT_ID}" \
-      --session isolated \
-      --message "${message}" \
-      2>/dev/null && ((created++)) || {
-        warn "Failed to create '${name}'"
-        ((skipped++))
-      }
+    if openclaw cron add \
+        --name "${name}" \
+        --cron "${cron}" \
+        --agent "${AGENT_ID}" \
+        --session isolated \
+        --message "${message}" 2>/dev/null; then
+      ((created += 1))
+    else
+      warn "Failed to create '${name}'"
+      ((skipped += 1))
+    fi
   done
 
   echo ""
