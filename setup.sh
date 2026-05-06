@@ -965,13 +965,19 @@ setup_telegram() {
   echo "  1. Open Telegram → search @BotFather → /newbot"
   echo "  2. Name it (e.g. \"Маркетолог Студии\") → get token (e.g. 123456:ABC-DEF...)"
   echo ""
-  read -p "  Step 0 — Bot ID (numeric part before : in token): " BOT_ID
-  read -p "  Step 1 — Full bot token: " TOKEN
+  read -p "  Bot token (скопируйте из BotFather, начинается с цифр): " TOKEN
   echo ""
 
-  if [[ -z "${BOT_ID}" ]] || [[ -z "${TOKEN}" ]]; then
-    warn "Bot ID or token not provided — Telegram setup skipped"
+  if [[ -z "${TOKEN}" ]]; then
+    warn "Bot token not provided — Telegram setup skipped"
     return
+  fi
+
+  # Auto-extract Bot ID (numeric part before colon) from full token
+  BOT_ID="${TOKEN%%:*}"
+  # If there's no colon, treat the entire input as Bot ID and warn
+  if [[ "${BOT_ID}" == "${TOKEN}" ]]; then
+    warn "No colon found in token — using entire input as Bot ID"
   fi
 
   info "Bot ID: ${BOT_ID}"
