@@ -420,6 +420,14 @@ install_deps() {
   ${pip_cmd} install ${pip_flags} -r "${SKILL_DIR}/requirements.txt" -q \
     && success "Packages installed" \
     || warn "pip failed — run manually: ${pip_cmd} install ${pip_flags} -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
+
+  # Проверяем, что ключевой модуль импортируется
+  if ! ${PY_CMD} -c "from dotenv import load_dotenv" 2>/dev/null; then
+    warn "python-dotenv не найден — пробую установить явно..."
+    ${pip_cmd} install ${pip_flags} python-dotenv -q 2>/dev/null \
+      && success "python-dotenv установлен" \
+      || warn "Не удалось установить python-dotenv — возможно, pip3/pip недоступен"
+  fi
 }
 
 # ── 6. YClients API tokens ────────────────────────────────────
@@ -527,7 +535,7 @@ test_yc_connection() {
 
   step "YClients API connection test"
   local rc
-  rc=$(curl -s -o /dev/null -w "%{http_code}" "https://api.yclients.com/api/v2/user" \
+  rc=$(curl -s -o /dev/null -w "%{http_code}" "https://api.yclients.com/api/v1/companies" \
     -H "Authorization: Bearer ${bearer}, User ${user}" 2>/dev/null) || rc=000
 
   if [[ "${rc}" == "200" ]]; then
