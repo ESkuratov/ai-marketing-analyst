@@ -338,11 +338,14 @@ setup_db() {
       DB_URL="${input:-${current_url}}"
 
       info "Testing connection..."
-      if psql "${DB_URL}" -c "SELECT 1 AS ok;" -t -q 2>/dev/null; then
+      local psql_err
+      psql_err=$(psql "${DB_URL}" -c "SELECT 1 AS ok;" -t -q 2>&1) && rc=0 || rc=$?
+      if [[ "${rc}" == 0 ]]; then
         success "Connection OK: ${DB_URL}"
         break
       else
         warn "Cannot connect to PostgreSQL with: ${DB_URL}"
+        echo "  ${DIM}${psql_err}${NC}"
         read -p "  Try again? [Y/n]: " -n 1 -r
         echo
         if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
