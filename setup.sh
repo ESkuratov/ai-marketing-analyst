@@ -55,6 +55,7 @@ OPENCLAW_HOME="${HOME}/.openclaw"
 OPENCLAW_CONFIG="${OPENCLAW_HOME}/openclaw.json"
 WORKSPACE_DIR="${OPENCLAW_HOME}/workspace-${AGENT_ID}"
 SKILL_DEST="${WORKSPACE_DIR}/.skills/marketing-pipeline"
+VENV_DIR="${WORKSPACE_DIR}/.venv"
 
 DB_URL="${DATABASE_URL:-postgresql://localhost:5432/massage_studio}"
 MODEL="${MODEL:-claude-sonnet-4-20250514}"
@@ -390,12 +391,18 @@ run_migrations() {
 install_deps() {
   step "Python dependencies"
   if [[ "${DRY_RUN}" == true ]]; then
-    info "Would run: pip install -r ${SKILL_DIR}/requirements.txt"
+    info "Would create venv & pip install -r ${SKILL_DIR}/requirements.txt"
     return
   fi
-  pip install -r "${SKILL_DIR}/requirements.txt" -q \
-    && success "Packages installed" \
-    || warn "pip failed — run manually: pip install -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
+
+  if [[ ! -d "${VENV_DIR}" ]]; then
+    info "Creating virtual environment..."
+    python3 -m venv "${VENV_DIR}"
+  fi
+
+  "${VENV_DIR}/bin/pip" install -r "${SKILL_DIR}/requirements.txt" -q \
+    && success "Packages installed (venv: ${VENV_DIR})" \
+    || warn "pip failed — run manually: ${VENV_DIR}/bin/pip install -r .agent/marketing-analyst/.skills/marketing-pipeline/requirements.txt"
 }
 
 # ── 6. YClients API tokens ────────────────────────────────────
@@ -580,7 +587,8 @@ setup_initial_data() {
   info "Период: ${DATE_FROM} → ${DATE_TO}"
 
   local run_all="${SKILL_DIR}/connectors/run_all.py"
-  local py_cmd="PYTHONPATH=${SKILL_DIR} python ${run_all}"
+  local py="${VENV_DIR}/bin/python"
+  local py_cmd="PYTHONPATH=${SKILL_DIR} ${py} ${run_all}"
 
   if [[ "${DRY_RUN}" == true ]]; then
     info "Would run: ${py_cmd} --date-from=${DATE_FROM} --date-to=${DATE_TO}"
@@ -588,13 +596,13 @@ setup_initial_data() {
   fi
 
   success "Запуск загрузки данных..."
-  PYTHONPATH="${SKILL_DIR}" DATABASE_URL="${DB_URL}" python "${run_all}" --date-from="${DATE_FROM}" --date-to="${DATE_TO}" \
+  PYTHONPATH="${SKILL_DIR}" DATABASE_URL="${DB_URL}" "${py}" "${run_all}" --date-from="${DATE_FROM}" --date-to="${DATE_TO}" \
     && success "Данные загружены успешно" \
     || warn "Загрузка завершилась с ошибками — проверьте токены API и соединение"
 
   echo ""
   info "После загрузки данных запустите пайплайн для обработки:"
-  info "  PYTHONPATH=${SKILL_DEST} python ${SKILL_DEST}/pipeline/run_pipeline.py --all-studios"
+  info "  PYTHONPATH=${SKILL_DEST} ${VENV_DIR}/bin/python ${SKILL_DEST}/pipeline/run_pipeline.py --all-studios"
 }
 
 # ── 9. Studio setup ────────────────────────────────────────────
@@ -618,8 +626,9 @@ setup_studio() {
   read -p "  YClients company ID (optional): " YC_ID
   read -p "  AMO CRM domain (optional): " AMO_DOMAIN
 
+  local py="${VENV_DIR}/bin/python"
   local PYTHONPATH="${PROJECT_DIR}/.agent/marketing-analyst/.skills/marketing-pipeline"
-  local CMD="PYTHONPATH=${PYTHONPATH} DATABASE_URL=${DB_URL} python ${PROJECT_DIR}/add_studio.py"
+  local CMD="PYTHONPATH=${PYTHONPATH} DATABASE_URL=${DB_URL} ${py} ${PROJECT_DIR}/add_studio.py"
   CMD="${CMD} --studio-id=${STUDIO_ID} --name=\"${STUDIO_NAME}\""
   [[ -n "${YC_ID}" ]]     && CMD="${CMD} --yc-company-id=${YC_ID}"
   [[ -n "${AMO_DOMAIN}" ]] && CMD="${CMD} --amo-domain=${AMO_DOMAIN}"
@@ -792,9 +801,9 @@ summary() {
   echo "  Next steps:"
   echo "    1. Fill ${WORKSPACE_DIR}/.env with remaining API keys (AMO CRM)"
   echo "    2. openclaw gateway"
-  echo "    3. python ${SKILL_DEST}/connectors/run_all.py"
+  echo "    3. ${VENV_DIR}/bin/python ${SKILL_DEST}/connectors/run_all.py"
   echo "       — test connectors"
-  echo "    4. python ${SKILL_DEST}/pipeline/run_pipeline.py --all-studios"
+  echo "    4. ${VENV_DIR}/bin/python ${SKILL_DEST}/pipeline/run_pipeline.py --all-studios"
   echo "       — run full pipeline"
   echo ""
 }
