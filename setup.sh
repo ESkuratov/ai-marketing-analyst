@@ -471,7 +471,17 @@ setup_yc_tokens() {
     return
   fi
 
-  if [[ "${DRY_RUN}" != true ]] && [[ -f "${env_file}" ]]; then
+  if [[ "${DRY_RUN}" == true ]]; then
+    info "Would save YC_BEARER_TOKEN and YC_USER_TOKEN to ${env_file}"
+    return
+  fi
+
+  mkdir -p "${WORKSPACE_DIR}"
+
+  if [[ ! -f "${env_file}" ]]; then
+    echo "YC_BEARER_TOKEN=${YC_BEARER}" > "${env_file}"
+    echo "YC_USER_TOKEN=${YC_USER}" >> "${env_file}"
+  else
     if grep -q '^YC_BEARER_TOKEN=' "${env_file}" 2>/dev/null; then
       sed -i '' "s|^YC_BEARER_TOKEN=.*|YC_BEARER_TOKEN=${YC_BEARER}|" "${env_file}"
     else
@@ -482,10 +492,8 @@ setup_yc_tokens() {
     else
       echo "YC_USER_TOKEN=${YC_USER}" >> "${env_file}"
     fi
-    success "YC tokens saved to ${env_file}"
-  elif [[ "${DRY_RUN}" == true ]]; then
-    info "Would save YC_BEARER_TOKEN and YC_USER_TOKEN to ${env_file}"
   fi
+  success "YC tokens saved to ${env_file}"
 }
 
 # ── 7. Google Sheets Leads Sheet ID ──────────────────────────
@@ -533,16 +541,23 @@ setup_gs_leads() {
     return
   fi
 
-  if [[ "${DRY_RUN}" != true ]] && [[ -f "${env_file}" ]]; then
+  if [[ "${DRY_RUN}" == true ]]; then
+    info "Would save GS_LEADS_SHEET_ID=${GS_SHEET} to ${env_file}"
+    return
+  fi
+
+  mkdir -p "${WORKSPACE_DIR}"
+
+  if [[ ! -f "${env_file}" ]]; then
+    echo "GS_LEADS_SHEET_ID=${GS_SHEET}" > "${env_file}"
+  else
     if grep -q '^GS_LEADS_SHEET_ID=' "${env_file}" 2>/dev/null; then
       sed -i '' "s|^GS_LEADS_SHEET_ID=.*|GS_LEADS_SHEET_ID=${GS_SHEET}|" "${env_file}"
     else
       echo "GS_LEADS_SHEET_ID=${GS_SHEET}" >> "${env_file}"
     fi
-    success "GS_LEADS_SHEET_ID saved to ${env_file}"
-  elif [[ "${DRY_RUN}" == true ]]; then
-    info "Would save GS_LEADS_SHEET_ID=${GS_SHEET} to ${env_file}"
   fi
+  success "GS_LEADS_SHEET_ID saved to ${env_file}"
 }
 
 # ── 8. Initial data load ─────────────────────────────────────
