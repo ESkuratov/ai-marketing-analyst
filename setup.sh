@@ -814,7 +814,7 @@ setup_studio() {
   if [[ "${count}" -gt 0 ]]; then info "Studios exist (${count}), skipping"; return; fi
 
   if [[ "${AUTO}" == true ]]; then
-    info "Skipping (use --auto, add studio later via add_studio.py)"
+    info "Skipping (use --auto, add studio later via psql)"
     return
   fi
 
@@ -839,7 +839,7 @@ setup_studio() {
     INSERT INTO ops.studios (studio_id, name, yc_company_id, amo_domain, timezone)
     VALUES ('${STUDIO_ID}', '${STUDIO_NAME}', ${yc_val}, ${amo_val}, 'Europe/Moscow')
     ON CONFLICT (studio_id) DO UPDATE SET name = EXCLUDED.name;
-  " 2>/dev/null && success "Studio '${STUDIO_ID}' added" || warn "Studio setup failed — add later via add_studio.py"
+  " 2>/dev/null && success "Studio '${STUDIO_ID}' added" || warn "Studio setup failed — add manually via psql"
 }
 
 # ── 11. Cron jobs ──────────────────────────────────────────────────
