@@ -10,6 +10,7 @@ gsheets_leads_connector.py — коннектор к Google Sheets с лидам
 
 import csv
 import io
+import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -137,7 +138,7 @@ class GsheetsLeadsConnector:
             "client_phone": phone_clean or None,
             "studio_name": studio_name_raw or None,
             "created_at": created_at,
-            "raw_data": {
+            "raw_data": json.dumps({
                 "source": source_name,
                 "date": date_str,
                 "name": client_name,
@@ -145,7 +146,7 @@ class GsheetsLeadsConnector:
                 "studio": studio_name_raw,
                 "promotion": promotion,
                 "deal_id": deal_id,
-            },
+            }),
         }
 
     @staticmethod
