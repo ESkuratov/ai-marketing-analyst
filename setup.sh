@@ -536,7 +536,8 @@ test_yc_connection() {
   step "YClients API connection test"
   local rc
   rc=$(curl -s -o /dev/null -w "%{http_code}" "https://api.yclients.com/api/v1/companies" \
-    -H "Authorization: Bearer ${bearer}, User ${user}" 2>/dev/null) || rc=000
+    -H "Authorization: Bearer ${bearer}, User ${user}" \
+    -H "Accept: application/vnd.yclients.v2+json" 2>/dev/null) || rc=000
 
   if [[ "${rc}" == "200" ]]; then
     success "YClients API connection OK"
