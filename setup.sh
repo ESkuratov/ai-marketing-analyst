@@ -251,19 +251,35 @@ setup_db() {
   if [[ "${AUTO}" == true ]]; then
     DB_URL="${current_url}"
     info "Using: ${DB_URL}"
-  else
-    echo "  Current: ${current_url}"
-    read -p "  Connection string [${current_url}]: " input
-    DB_URL="${input:-${current_url}}"
-  fi
-
-  info "Testing connection..."
-  if psql "${DB_URL}" -c "SELECT 1 AS ok;" -t -q 2>/dev/null; then
+    info "Testing connection..."
+    if ! psql "${DB_URL}" -c "SELECT 1 AS ok;" -t -q 2>/dev/null; then
+      warn "Cannot connect to PostgreSQL. Migrations will be skipped."
+      PSQL_AVAILABLE=false
+      return
+    fi
     success "Connection OK: ${DB_URL}"
   else
-    warn "Cannot connect to PostgreSQL. Migrations will be skipped."
-    PSQL_AVAILABLE=false
-    return
+    while true; do
+      echo "  Current: ${current_url}"
+      read -p "  Connection string [${current_url}]: " input
+      DB_URL="${input:-${current_url}}"
+
+      info "Testing connection..."
+      if psql "${DB_URL}" -c "SELECT 1 AS ok;" -t -q 2>/dev/null; then
+        success "Connection OK: ${DB_URL}"
+        break
+      else
+        warn "Cannot connect to PostgreSQL with: ${DB_URL}"
+        read -p "  Try again? [Y/n]: " -n 1 -r
+        echo
+        if [[ "${REPLY}" =~ ^[Nn]$ ]]; then
+          warn "Migrations will be skipped."
+          PSQL_AVAILABLE=false
+          return
+        fi
+        current_url="${DB_URL}"
+      fi
+    done
   fi
 
   if [[ "${DRY_RUN}" != true ]]; then
