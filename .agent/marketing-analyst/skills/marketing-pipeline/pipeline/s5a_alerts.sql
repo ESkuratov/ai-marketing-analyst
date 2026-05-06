@@ -205,6 +205,7 @@ WHERE ln.studio_id = %(studio_id)s
   AND ln.funnel_stage = 'negotiation'
   AND ln.created_at < NOW() - (COALESCE((cfg.value->>'A05_max_negotiation_days')::int, 7) || ' days')::interval
   AND ln.closed_at IS NULL
+GROUP BY cfg.value
 HAVING COUNT(DISTINCT ln.lead_id) > 0
 AND NOT EXISTS (
     SELECT 1 FROM ops.active_alerts a
@@ -239,6 +240,7 @@ WHERE ln.studio_id = %(studio_id)s
   AND ln.funnel_stage = 'no_answer'
   AND ln.updated_at < NOW() - (COALESCE((cfg.value->>'A06_max_no_answer_days')::int, 5) || ' days')::interval
   AND ln.closed_at IS NULL
+GROUP BY cfg.value
 HAVING COUNT(DISTINCT ln.lead_id) > 0
 AND NOT EXISTS (
     SELECT 1 FROM ops.active_alerts a
@@ -352,6 +354,7 @@ WHERE ln.studio_id = %(studio_id)s
   AND ln.source = 'amo'
   AND ln.funnel_stage = 'success'
   AND amo.price > COALESCE(yc_total.yc_sum, 0)
+GROUP BY cfg.value
 HAVING COUNT(DISTINCT ln.lead_id) > 0
 AND NOT EXISTS (
     SELECT 1 FROM ops.active_alerts a
@@ -390,6 +393,7 @@ WHERE ln.studio_id = %(studio_id)s
   AND ln.source = 'amo'
   AND ln.funnel_stage = 'deposit'
   AND ABS(amo.price - COALESCE(yc_pay.yc_sum, 0)) > 0
+GROUP BY cfg.value
 HAVING COUNT(DISTINCT ln.lead_id) > 0
 AND NOT EXISTS (
     SELECT 1 FROM ops.active_alerts a
@@ -428,7 +432,8 @@ CROSS JOIN LATERAL (
       AND (studio_id = %(studio_id)s OR studio_id = 'all')
     LIMIT 1
 ) cfg
-WHERE total_resolved > 0
+GROUP BY cfg.value
+HAVING total_resolved > 0
   AND ROUND(closed_count::numeric / NULLIF(total_resolved, 0) * 100, 1)
       > COALESCE((cfg.value->>'A12_max_closure_rate_pct')::int, 30)
 AND NOT EXISTS (
