@@ -391,8 +391,8 @@ class AmoConnector(BaseConnector):
         return {}
 
     def _get_contact_details(self, contact_id: int) -> dict | None:
-        """Получить детали контакта по ID."""
-        result = self._make_request(f"/api/v4/contacts/{contact_id}")
+        """Получить детали контакта по ID (с кастомными полями)."""
+        result = self._make_request(f"/api/v4/contacts/{contact_id}", params={"with": "custom_fields"})
         if "error" in result:
             self.log.warning("Failed to fetch contact %s: %s", contact_id, result.get("error"))
             return None
