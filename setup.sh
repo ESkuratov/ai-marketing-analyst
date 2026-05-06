@@ -884,7 +884,7 @@ setup_cron() {
         --cron "${cron}" \
         --agent "${AGENT_ID}" \
         --session isolated \
-        --message "${message}" 2>/dev/null; then
+        --message "${message}"; then
       ((created += 1))
     else
       warn "Failed to create '${name}'"
@@ -930,7 +930,7 @@ setup_telegram() {
   echo "  2. Name it (e.g. \"Маркетолог Студии\") → get token (e.g. 123456:ABC-DEF...)"
   echo ""
   read -p "  Step 0 — Bot ID (numeric part before : in token): " BOT_ID
-  read -sp "  Step 1 — Full bot token: " TOKEN
+  read -p "  Step 1 — Full bot token: " TOKEN
   echo ""
 
   if [[ -z "${BOT_ID}" ]] || [[ -z "${TOKEN}" ]]; then
