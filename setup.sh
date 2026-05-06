@@ -939,7 +939,7 @@ setup_telegram() {
   if [[ "${AUTO}" == true ]]; then
     info "Skipping (use --auto, configure Telegram bot manually)"
     info "  1. openclaw config set channels.telegram.accounts.<ID>.enabled true"
-    info "  2. openclaw agents bind --agent ${AGENT_ID} --bind telegram"
+    info "  2. openclaw agents bind --agent ${AGENT_ID} --bind telegram --account <BOT_ID>"
     info "  3. openclaw pairing approve telegram <CODE>"
     return
   fi
@@ -971,8 +971,8 @@ setup_telegram() {
   openclaw config set "channels.telegram.accounts.${BOT_ID}.groups.*.requireMention" true
   success "Telegram bot account '${BOT_ID}' configured in OpenCLAW"
 
-  if openclaw agents bind --agent "${AGENT_ID}" --bind telegram 2>/dev/null; then
-    success "Agent '${AGENT_ID}' bound to Telegram"
+  if openclaw agents bind --agent "${AGENT_ID}" --bind telegram --account "${BOT_ID}" 2>/dev/null; then
+    success "Agent '${AGENT_ID}' bound to Telegram (account ${BOT_ID})"
   else
     info "Agent already bound or bind skipped"
   fi
