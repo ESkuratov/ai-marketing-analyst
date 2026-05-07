@@ -53,7 +53,7 @@ SKILL_DIR="${AGENT_SOURCE_DIR}/skills/marketing-pipeline"
 
 OPENCLAW_HOME="${HOME}/.openclaw"
 OPENCLAW_CONFIG="${OPENCLAW_HOME}/openclaw.json"
-WORKSPACE_DIR="${OPENCLAW_HOME}/workspace-${AGENT_ID}"
+WORKSPACE_DIR="/workspace-${AGENT_ID}"
 SKILL_DEST="${WORKSPACE_DIR}/skills/marketing-pipeline"
 VENV_DIR="${WORKSPACE_DIR}/.venv"
 PY_CMD="${VENV_DIR}/bin/python"
