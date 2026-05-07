@@ -999,6 +999,7 @@ setup_telegram() {
     return
   fi
 
+  openclaw config set "channels.telegram.accounts" "{}"
   openclaw config set "channels.telegram.accounts.${BOT_ID}.enabled" true
   openclaw config set "channels.telegram.accounts.${BOT_ID}.botToken" "${TOKEN}"
   openclaw config set "channels.telegram.accounts.${BOT_ID}.groups.*.requireMention" true
